@@ -54,9 +54,9 @@ test('HTTP API registers, authenticates, isolates saves, and validates economy a
     assert.equal(page.status, 200);
     assert.match(await page.text(), /中天争霸/);
 
-    const versionedAsset = await request('/assets/world/zhongtian-platform-cursed-community-v2.webp');
+    const versionedAsset = await request('/assets/characters/yang-zihao-emperor-sword-v1.png');
     assert.equal(versionedAsset.status, 200);
-    assert.equal(versionedAsset.headers.get('content-type'), 'image/webp');
+    assert.equal(versionedAsset.headers.get('content-type'), 'image/png');
     assert.equal(versionedAsset.headers.get('cache-control'), 'public, max-age=31536000, immutable');
 
     const script = await request('/game.js');

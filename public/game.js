@@ -2,20 +2,12 @@ import { api } from './api.js';
 import { UI } from './ui.js';
 import { ITEMS, SECURITY_SURVIVAL_SECONDS, actualDamage, armorReduction, clamp, distance, reflectBullet, segmentCircleHit, weaponAttack } from './rules.js';
 import { REGIONS, createRegionEnemies, drawRegion, getInteractions } from './world.js';
-import { preloadWorldArt } from './world-art.js';
-import { directionRow, frameAt, resolveAnimationState } from './player-animation.js';
 
 const q = (selector) => document.querySelector(selector);
 const canvas = q('#game-canvas');
 const ctx = canvas.getContext('2d');
-const playerSprite = new Image();
-playerSprite.src = '/assets/characters/yang-zihao-run-sprites-v2.webp';
-const playerSlashSprite = new Image();
-playerSlashSprite.src = '/assets/characters/yang-zihao-slash-sprites-v2.webp';
-const playerSkillSprite = new Image();
-playerSkillSprite.src = '/assets/characters/yang-zihao-skill-sprites-v2.webp';
-const playerAuraSprite = new Image();
-playerAuraSprite.src = '/assets/characters/yang-zihao-aura-sprites-v2.webp';
+const emperorSwordSprite = new Image();
+emperorSwordSprite.src = '/assets/characters/yang-zihao-emperor-sword-v1.png';
 const keys = new Set();
 let authMode = 'login';
 let entryIntent = 'new';
@@ -81,13 +73,7 @@ function waitForImage(image) {
 }
 
 async function preloadGameAssets() {
-  await Promise.all([
-    preloadWorldArt(),
-    waitForImage(playerSprite),
-    waitForImage(playerSlashSprite),
-    waitForImage(playerSkillSprite),
-    waitForImage(playerAuraSprite)
-  ]);
+  await waitForImage(emperorSwordSprite);
 }
 
 async function startGame(save) {
@@ -429,32 +415,11 @@ class GreatWarGame {
     for(const item of this.interactions.filter(i=>['portal','teleporter'].includes(i.type))){const unlocked=!(item.id==='building2_gate'&&this.save.quest!=='building2_active');ctx.strokeStyle=unlocked?'rgba(105,224,196,.55)':'rgba(211,80,70,.4)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(item.x,item.y,28+Math.sin(time*3+item.x)*4,0,Math.PI*2);ctx.stroke();ctx.fillStyle=unlocked?'rgba(105,224,196,.12)':'rgba(211,80,70,.1)';ctx.beginPath();ctx.arc(item.x,item.y,22,0,Math.PI*2);ctx.fill();}
   }
 
-  drawSheetSprite(image, row, frame, columns, rows, size, scale = 1) {
-    if (!image.complete || !image.naturalWidth || row < 0 || row >= rows || frame < 0 || frame >= columns) return false;
-    const cellWidth = image.naturalWidth / columns;
-    const cellHeight = image.naturalHeight / rows;
-    const drawHeight = size * scale;
-    const drawWidth = drawHeight * cellWidth / cellHeight;
-    ctx.drawImage(image, frame * cellWidth, row * cellHeight, cellWidth, cellHeight, -drawWidth / 2, 26 - drawHeight, drawWidth, drawHeight);
-    return true;
-  }
-
   drawPlayer(p,time) {
     const bob=Math.sin(p.step)*2;ctx.save();ctx.translate(p.x,p.y);if(p.aura>0){const g=ctx.createRadialGradient(0,0,8,0,0,75);g.addColorStop(0,'rgba(255,217,112,.26)');g.addColorStop(1,'rgba(255,217,112,0)');ctx.fillStyle=g;ctx.fillRect(-80,-80,160,160);ctx.strokeStyle=`rgba(255,226,134,${.45+Math.sin(time*7)*.18})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,38+Math.sin(time*5)*4,0,Math.PI*2);ctx.stroke();}
     ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(0,20,25,9,0,0,Math.PI*2);ctx.fill();if(p.invuln>0&&Math.floor(p.invuln*18)%2===0)ctx.globalAlpha=.45;
-    const state=resolveAnimationState({dead:this.dead,hurt:p.hurt,aura:p.aura,action:p.animation.action,moving:p.moving});const row=directionRow(p.facing);const actionFrame=frameAt(p.animation.elapsed,p.animation.duration||1,4);const auraScale=state==='aura_idle'?1.03+Math.sin(time*7)*.025:1;
-    if(state==='dead'){ctx.translate(0,18);ctx.rotate(Math.PI/2);ctx.globalAlpha*=.65;}
-    let spriteDrawn=false;
-    if(this.hasSword()){
-      if(state==='attack_1'||state==='attack_2'||state==='attack_3')spriteDrawn=this.drawSheetSprite(playerSlashSprite,row,actionFrame,4,4,132,auraScale);
-      else if(state==='dash')spriteDrawn=this.drawSheetSprite(playerSkillSprite,row,actionFrame,4,8,132,auraScale);
-      else if(state==='rise'||state==='rise_combo')spriteDrawn=this.drawSheetSprite(playerSkillSprite,row+4,actionFrame,4,8,132,(state==='rise_combo'?1.08:1)*auraScale);
-      else if(state==='aura_cast')spriteDrawn=this.drawSheetSprite(playerAuraSprite,row,actionFrame,4,4,132,auraScale);
-    }
-    if(!spriteDrawn)spriteDrawn=this.drawSheetSprite(playerSprite,row,state==='run'?Math.floor(time*10)%4:1,4,4,132,auraScale);
-    if(!spriteDrawn){ctx.fillStyle='#245a67';ctx.beginPath();ctx.moveTo(-18,20);ctx.lineTo(-13,-19+bob);ctx.lineTo(12,-19+bob);ctx.lineTo(20,20);ctx.closePath();ctx.fill();ctx.strokeStyle=p.aura>0?'#ffe18a':'#d4a94f';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#c9916c';ctx.beginPath();ctx.arc(0,-29+bob,13,0,Math.PI*2);ctx.fill();ctx.fillStyle='#20262a';ctx.beginPath();ctx.arc(-1,-35+bob,14,Math.PI,0);ctx.fill();
-      if(this.hasSword()){ctx.save();ctx.rotate(p.facing);ctx.fillStyle='#bb9143';ctx.fillRect(10,-4,27,4);ctx.fillStyle=p.aura>0?'#fff2b0':'#e9e2d1';ctx.beginPath();ctx.moveTo(34,-7);ctx.lineTo(62,-2);ctx.lineTo(34,4);ctx.closePath();ctx.fill();ctx.restore();}}
-    if(state==='hurt'){ctx.save();ctx.globalCompositeOperation='source-atop';ctx.globalAlpha*=.45;ctx.fillStyle='#e55a52';ctx.fillRect(-78,-122,156,150);ctx.restore();}
+    ctx.fillStyle='#245a67';ctx.beginPath();ctx.moveTo(-18,20);ctx.lineTo(-13,-19+bob);ctx.lineTo(12,-19+bob);ctx.lineTo(20,20);ctx.closePath();ctx.fill();ctx.strokeStyle=p.aura>0?'#ffe18a':'#d4a94f';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#c9916c';ctx.beginPath();ctx.arc(0,-29+bob,13,0,Math.PI*2);ctx.fill();ctx.fillStyle='#20262a';ctx.beginPath();ctx.arc(-1,-35+bob,14,Math.PI,0);ctx.fill();
+    ctx.save();ctx.rotate(p.facing);if(emperorSwordSprite.complete&&emperorSwordSprite.naturalWidth){ctx.drawImage(emperorSwordSprite,9,-10,74,37);}else{ctx.fillStyle='#bb9143';ctx.fillRect(10,-4,27,4);ctx.fillStyle=p.aura>0?'#fff2b0':'#e9e2d1';ctx.beginPath();ctx.moveTo(34,-7);ctx.lineTo(62,-2);ctx.lineTo(34,4);ctx.closePath();ctx.fill();}ctx.restore();
     ctx.restore();
   }
 
@@ -497,4 +462,4 @@ document.addEventListener('gw2-modal-action',async event=>{
 });
 window.addEventListener('beforeunload',()=>{if(game?.unsaved){const body=JSON.stringify({hero:game.save.hero,region:game.save.region,checkpoint:game.save.checkpoint,quest:game.save.quest,health:Math.max(1,Math.round(game.player.hp))});navigator.sendBeacon('/api/save',new Blob([body],{type:'application/json'}));}});
 
-setAuthMode('login');checkServer();preloadWorldArt().catch(() => {});
+setAuthMode('login');checkServer();

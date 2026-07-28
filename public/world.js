@@ -1,5 +1,4 @@
 import { SECURITY_SURVIVAL_SECONDS } from './rules.js';
-import { drawWorldArt } from './world-art.js';
 
 const BUILDINGS = [
   { number: '9', x: 620, y: 420, tone: '#376d6a' },
@@ -141,7 +140,7 @@ function drawSecurity(ctx,time){if(!drawWorldArt(ctx,'security',1320,860)){drawS
 function drawDungeon(ctx,regionId,time){const region=REGIONS[regionId];if(!drawWorldArt(ctx,regionId,region.width,region.height)){drawDungeonFallback(ctx,regionId,time);return;}if(regionId==='building2_boss'){const aura=ctx.createRadialGradient(1120,460,20,1120,460,330);aura.addColorStop(0,'rgba(190,56,63,.2)');aura.addColorStop(1,'rgba(190,56,63,0)');ctx.fillStyle=aura;ctx.fillRect(760,100,720,720);}else drawDungeonExit(ctx,regionId,time);ctx.fillStyle=regionId==='building2_boss'?'#d66a63':'#77cdb9';ctx.font='700 13px serif';ctx.textAlign='center';ctx.fillText(region.name,region.width/2,95);}
 
 export function drawRegion(ctx, regionId, time) {
-  if (regionId === 'platform') drawPlatformRegion(ctx,time);
-  else if (regionId === 'security') drawSecurity(ctx,time);
-  else drawDungeon(ctx,regionId,time);
+  if (regionId === 'platform') drawPlatformFallback(ctx,time);
+  else if (regionId === 'security') drawSecurityFallback(ctx,time);
+  else drawDungeonFallback(ctx,regionId,time);
 }
