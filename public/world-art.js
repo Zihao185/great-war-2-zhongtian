@@ -23,6 +23,18 @@ function imageFor(regionId) {
   return images.get(regionId);
 }
 
+function waitForImage(image) {
+  if (!image || image.complete) return Promise.resolve();
+  return new Promise(resolve => {
+    image.addEventListener('load', resolve, { once: true });
+    image.addEventListener('error', resolve, { once: true });
+  });
+}
+
+export function preloadWorldArt() {
+  return Promise.all(Object.keys(WORLD_ART).map(regionId => waitForImage(imageFor(regionId))));
+}
+
 export function drawWorldArt(ctx, regionId, width, height) {
   const image = imageFor(regionId);
   if (!image?.complete || !image.naturalWidth) return false;

@@ -2,6 +2,7 @@ import { api } from './api.js';
 import { UI } from './ui.js';
 import { ITEMS, SECURITY_SURVIVAL_SECONDS, actualDamage, armorReduction, clamp, distance, reflectBullet, segmentCircleHit, weaponAttack } from './rules.js';
 import { REGIONS, createRegionEnemies, drawRegion, getInteractions } from './world.js';
+import { preloadWorldArt } from './world-art.js';
 import { directionRow, frameAt, resolveAnimationState } from './player-animation.js';
 
 const q = (selector) => document.querySelector(selector);
@@ -21,6 +22,7 @@ let entryIntent = 'new';
 let currentAccount = null;
 let currentSave = null;
 let game = null;
+let gameStartSequence = 0;
 
 function showAuth(intent) {
   entryIntent = intent;
@@ -61,6 +63,7 @@ async function selectYang() {
 
 async function logout() {
   try { await api.logout(); } catch {}
+  gameStartSequence += 1;
   currentAccount = null; currentSave = null; game?.stop(); game = null; UI.showScreen('title-screen');
 }
 
@@ -69,7 +72,29 @@ async function checkServer() {
   catch { q('#server-status').classList.remove('online'); q('#server-status').innerHTML = '<i></i> 中天档案馆离线'; }
 }
 
-function startGame(save) {
+function waitForImage(image) {
+  if (image.complete) return Promise.resolve();
+  return new Promise(resolve => {
+    image.addEventListener('load', resolve, { once: true });
+    image.addEventListener('error', resolve, { once: true });
+  });
+}
+
+async function preloadGameAssets() {
+  await Promise.all([
+    preloadWorldArt(),
+    waitForImage(playerSprite),
+    waitForImage(playerSlashSprite),
+    waitForImage(playerSkillSprite),
+    waitForImage(playerAuraSprite)
+  ]);
+}
+
+async function startGame(save) {
+  const sequence = ++gameStartSequence;
+  UI.showScreen('loading-screen');
+  await preloadGameAssets();
+  if (sequence !== gameStartSequence || !currentAccount) return;
   UI.showScreen('game-screen');
   game?.stop(); game = new GreatWarGame(save); game.start();
 }
@@ -425,8 +450,8 @@ class GreatWarGame {
       else if(state==='dash')spriteDrawn=this.drawSheetSprite(playerSkillSprite,row,actionFrame,4,8,132,auraScale);
       else if(state==='rise'||state==='rise_combo')spriteDrawn=this.drawSheetSprite(playerSkillSprite,row+4,actionFrame,4,8,132,(state==='rise_combo'?1.08:1)*auraScale);
       else if(state==='aura_cast')spriteDrawn=this.drawSheetSprite(playerAuraSprite,row,actionFrame,4,4,132,auraScale);
-      if(!spriteDrawn)spriteDrawn=this.drawSheetSprite(playerSprite,row,state==='run'?Math.floor(time*10)%4:1,4,4,132,auraScale);
     }
+    if(!spriteDrawn)spriteDrawn=this.drawSheetSprite(playerSprite,row,state==='run'?Math.floor(time*10)%4:1,4,4,132,auraScale);
     if(!spriteDrawn){ctx.fillStyle='#245a67';ctx.beginPath();ctx.moveTo(-18,20);ctx.lineTo(-13,-19+bob);ctx.lineTo(12,-19+bob);ctx.lineTo(20,20);ctx.closePath();ctx.fill();ctx.strokeStyle=p.aura>0?'#ffe18a':'#d4a94f';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#c9916c';ctx.beginPath();ctx.arc(0,-29+bob,13,0,Math.PI*2);ctx.fill();ctx.fillStyle='#20262a';ctx.beginPath();ctx.arc(-1,-35+bob,14,Math.PI,0);ctx.fill();
       if(this.hasSword()){ctx.save();ctx.rotate(p.facing);ctx.fillStyle='#bb9143';ctx.fillRect(10,-4,27,4);ctx.fillStyle=p.aura>0?'#fff2b0':'#e9e2d1';ctx.beginPath();ctx.moveTo(34,-7);ctx.lineTo(62,-2);ctx.lineTo(34,4);ctx.closePath();ctx.fill();ctx.restore();}}
     if(state==='hurt'){ctx.save();ctx.globalCompositeOperation='source-atop';ctx.globalAlpha*=.45;ctx.fillStyle='#e55a52';ctx.fillRect(-78,-122,156,150);ctx.restore();}
