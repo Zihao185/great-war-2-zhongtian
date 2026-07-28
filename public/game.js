@@ -140,15 +140,15 @@ class GreatWarGame {
 
   onKeyDown(event) {
     const key = event.key.toLowerCase();
-    if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' ','q','e','r','f','escape'].includes(key)) event.preventDefault();
+    if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' ','j','k','l','f','escape'].includes(key)) event.preventDefault();
     if (event.repeat) { keys.add(key); return; }
     keys.add(key);
     if (key === 'escape' && UI.modalOpen()) UI.closeModal();
     else if (key === 'f') this.interact();
     else if (key === ' ') this.basicAttack();
-    else if (key === 'q') this.castDash();
-    else if (key === 'e') this.castRisingDragon();
-    else if (key === 'r') this.castImperialAura();
+    else if (key === 'j') this.castDash();
+    else if (key === 'k') this.castRisingDragon();
+    else if (key === 'l') this.castImperialAura();
   }
 
   onKeyUp(event) { keys.delete(event.key.toLowerCase()); }
