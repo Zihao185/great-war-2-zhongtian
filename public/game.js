@@ -6,12 +6,20 @@ import { REGIONS, createRegionEnemies, drawRegion, getInteractions } from './wor
 const q = (selector) => document.querySelector(selector);
 const canvas = q('#game-canvas');
 const ctx = canvas.getContext('2d');
+const playerSprite = new Image();
+playerSprite.src = '/assets/characters/yang-zihao-run-sprites-v1.png';
 const keys = new Set();
 let authMode = 'login';
 let entryIntent = 'new';
 let currentAccount = null;
 let currentSave = null;
 let game = null;
+
+function playerSpriteRow(facing) {
+  const horizontal = Math.cos(facing), vertical = Math.sin(facing);
+  if (Math.abs(vertical) >= Math.abs(horizontal)) return vertical >= 0 ? 0 : 3;
+  return horizontal < 0 ? 1 : 2;
+}
 
 function showAuth(intent) {
   entryIntent = intent;
@@ -99,7 +107,7 @@ class GreatWarGame {
     return {
       x: 0, y: 0, r: 18, maxHp: 160, hp: clamp(this.save.health || 160, 1, 160), speed: 265, facing: 0,
       attackCd: 0, dashCd: 0, riseCd: 0, comboWindow: 0, dragonBlood: 0, musou: 0, aura: 0,
-      invuln: 0, hurt: 0, step: 0, dashTime: 0, vx: 0, vy: 0
+      invuln: 0, hurt: 0, step: 0, moving: false, dashTime: 0, vx: 0, vy: 0
     };
   }
 
@@ -280,7 +288,7 @@ class GreatWarGame {
 
   updateMovement(dt) {
     const p=this.player;let dx=0,dy=0;if(keys.has('w')||keys.has('arrowup'))dy-=1;if(keys.has('s')||keys.has('arrowdown'))dy+=1;if(keys.has('a')||keys.has('arrowleft'))dx-=1;if(keys.has('d')||keys.has('arrowright'))dx+=1;
-    if(dx||dy){const len=Math.hypot(dx,dy);dx/=len;dy/=len;p.x+=dx*p.speed*dt;p.y+=dy*p.speed*dt;p.facing=Math.atan2(dy,dx);p.step+=dt*13;}
+    p.moving=Boolean(dx||dy);if(p.moving){const len=Math.hypot(dx,dy);dx/=len;dy/=len;p.x+=dx*p.speed*dt;p.y+=dy*p.speed*dt;p.facing=Math.atan2(dy,dx);p.step+=dt*13;}
     p.x=clamp(p.x,38,this.region.width-38);p.y=clamp(p.y,38,this.region.height-38);
   }
 
@@ -370,6 +378,7 @@ class GreatWarGame {
   drawPlayer(p,time) {
     const bob=Math.sin(p.step)*2;ctx.save();ctx.translate(p.x,p.y);if(p.aura>0){const g=ctx.createRadialGradient(0,0,8,0,0,75);g.addColorStop(0,'rgba(255,217,112,.26)');g.addColorStop(1,'rgba(255,217,112,0)');ctx.fillStyle=g;ctx.fillRect(-80,-80,160,160);ctx.strokeStyle=`rgba(255,226,134,${.45+Math.sin(time*7)*.18})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,38+Math.sin(time*5)*4,0,Math.PI*2);ctx.stroke();}
     ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(0,20,25,9,0,0,Math.PI*2);ctx.fill();if(p.invuln>0&&Math.floor(p.invuln*18)%2===0)ctx.globalAlpha=.45;
+    if(this.hasSword()&&playerSprite.complete&&playerSprite.naturalWidth){const cell=playerSprite.naturalWidth/4,row=playerSpriteRow(p.facing),frame=p.moving?Math.floor(time*10)%4:1,size=132;ctx.drawImage(playerSprite,frame*cell,row*cell,cell,cell,-size/2,26-size,size,size);ctx.restore();return;}
     ctx.fillStyle='#245a67';ctx.beginPath();ctx.moveTo(-18,20);ctx.lineTo(-13,-19+bob);ctx.lineTo(12,-19+bob);ctx.lineTo(20,20);ctx.closePath();ctx.fill();ctx.strokeStyle=p.aura>0?'#ffe18a':'#d4a94f';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#c9916c';ctx.beginPath();ctx.arc(0,-29+bob,13,0,Math.PI*2);ctx.fill();ctx.fillStyle='#20262a';ctx.beginPath();ctx.arc(-1,-35+bob,14,Math.PI,0);ctx.fill();
     if(this.hasSword()){ctx.save();ctx.rotate(p.facing);ctx.fillStyle='#bb9143';ctx.fillRect(10,-4,27,4);ctx.fillStyle=p.aura>0?'#fff2b0':'#e9e2d1';ctx.beginPath();ctx.moveTo(34,-7);ctx.lineTo(62,-2);ctx.lineTo(34,4);ctx.closePath();ctx.fill();ctx.restore();}ctx.restore();
   }
