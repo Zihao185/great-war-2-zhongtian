@@ -53,6 +53,15 @@ test('HTTP API registers, authenticates, isolates saves, and validates economy a
     const page = await request('/');
     assert.equal(page.status, 200);
     assert.match(await page.text(), /中天争霸/);
+
+    const versionedAsset = await request('/assets/world/zhongtian-platform-cursed-community-v2.webp');
+    assert.equal(versionedAsset.status, 200);
+    assert.equal(versionedAsset.headers.get('content-type'), 'image/webp');
+    assert.equal(versionedAsset.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+
+    const script = await request('/game.js');
+    assert.equal(script.status, 200);
+    assert.equal(script.headers.get('cache-control'), 'no-cache');
   } finally {
     await new Promise(resolveClose => server.close(resolveClose));
     store.close();

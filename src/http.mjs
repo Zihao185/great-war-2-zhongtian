@@ -6,7 +6,7 @@ import { applyAction, mergeProgressSave, RuleError } from './rules.mjs';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml'
+  '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml'
 };
 
 function json(res, status, data, headers = {}) {
@@ -150,7 +150,9 @@ export function createHttpServer({ store, staticDir, random = Math.random }) {
       if (relative.includes('..')) return json(res, 403, { error: '禁止访问' });
       const filePath = join(staticDir, relative);
       const data = await readFile(filePath);
-      res.writeHead(200, { 'content-type': MIME[extname(filePath)] || 'application/octet-stream', 'content-length': data.length, 'cache-control': 'no-cache' });
+      const immutableAsset = relative.startsWith('assets/') && /-v\d+\.(webp|png|jpe?g)$/i.test(relative);
+      const cacheControl = immutableAsset ? 'public, max-age=31536000, immutable' : 'no-cache';
+      res.writeHead(200, { 'content-type': MIME[extname(filePath)] || 'application/octet-stream', 'content-length': data.length, 'cache-control': cacheControl });
       res.end(data);
     } catch (error) {
       if (error?.code === 'ENOENT') return json(res, 404, { error: '页面不存在' });
