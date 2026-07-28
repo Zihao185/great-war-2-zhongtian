@@ -249,7 +249,7 @@ class GreatWarGame {
     if (!this.canAct() || !this.hasSword()) { if (this.canAct()) UI.toast('帝王剑尚未入手', 'red'); return; }
     const p=this.player;if(p.dashCd>0||p.animation.locked)return;const start={x:p.x,y:p.y};const end={x:clamp(p.x+Math.cos(p.facing)*260,35,this.region.width-35),y:clamp(p.y+Math.sin(p.facing)*260,35,this.region.height-35)};
     for(const enemy of this.enemies.filter(enemy=>!enemy.dead))if(segmentCircleHit(start,end,enemy,24))this.hitEnemy(enemy,weaponAttack(this.save),p.facing);
-    p.dashMotion={start,end,elapsed:0,duration:.18};p.dashCd=3;p.comboWindow=.8;p.invuln=.22;this.startPlayerAnimation('dash',.44,true);this.attackFx={type:'dash',time:.28,max:.28,start,end,color:'#75e3cd'};this.burst(start.x,start.y,'#67d7c1',18,170,.5);this.camera.shake=3;
+    p.dashMotion={start,end,elapsed:0,duration:.18};p.dashCd=3;p.comboWindow=.8;p.invuln=.22;this.startPlayerAnimation('dash',.44,true);this.attackFx={type:'dash',time:.44,max:.44,start,end,color:'#75e3cd'};this.burst(start.x,start.y,'#67d7c1',18,170,.5);this.camera.shake=3;
   }
 
   castRisingDragon() {
@@ -257,7 +257,7 @@ class GreatWarGame {
     const p=this.player;if(p.riseCd>0||p.animation.locked)return;const combo=p.comboWindow>0;const end={x:p.x+Math.cos(p.facing)*115,y:p.y+Math.sin(p.facing)*115};let hit=false;
     for(const enemy of this.enemies.filter(enemy=>!enemy.dead))if(segmentCircleHit(p,end,enemy,48)){this.hitEnemy(enemy,Math.round(weaponAttack(this.save)*1.18),p.facing);enemy.airborne=combo?1.05:.42;hit=true;}
     p.riseCd=5;p.comboWindow=0;this.startPlayerAnimation(combo?'rise_combo':'rise',.50,true);if(combo){p.dashCd=0;p.dragonBlood=3;UI.toast('连招成立 · 突进刷新 · 龙血三层','cyan');}else if(hit)UI.toast('升龙命中');
-    this.attackFx={type:'rise',time:.42,max:.42,facing:p.facing,color:combo?'#ffe28a':'#75dbc5'};this.burst(end.x,end.y,combo?'#ffe38a':'#6bdac5',22,210,.65);this.camera.shake=6;
+    this.attackFx={type:'rise',time:.58,max:.58,facing:p.facing,color:combo?'#ffe28a':'#75dbc5',combo};this.burst(end.x,end.y,combo?'#ffe38a':'#6bdac5',22,210,.65);this.camera.shake=6;
   }
 
   castImperialAura() {
@@ -432,7 +432,21 @@ class GreatWarGame {
 
   drawBullet(b,time) {const g=ctx.createRadialGradient(b.x,b.y,1,b.x,b.y,b.r*4);g.addColorStop(0,b.color);g.addColorStop(1,'transparent');ctx.fillStyle=g;ctx.fillRect(b.x-b.r*4,b.y-b.r*4,b.r*8,b.r*8);ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(b.x,b.y,b.r+Math.sin(time*10+b.x)*1.2,0,Math.PI*2);ctx.fill();if(b.kind==='security'){ctx.strokeStyle='rgba(255,185,147,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(b.x,b.y,b.r+5,0,Math.PI*2);ctx.stroke();}}
   drawHazard(h){const progress=Math.max(0,h.time/h.max);ctx.fillStyle=`rgba(220,67,66,${h.triggered?.24:.07})`;ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(255,102,83,${.4+progress*.5})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(h.x,h.y,h.r*(1-progress*.55),0,Math.PI*2);ctx.stroke();}
-  drawAttackFx(){const fx=this.attackFx;if(!fx)return;const progress=1-fx.time/fx.max;ctx.save();if(fx.type==='arc'){ctx.translate(this.player.x,this.player.y);ctx.rotate(fx.facing);ctx.strokeStyle=fx.color;ctx.globalAlpha=1-progress;ctx.lineWidth=7-progress*4;ctx.beginPath();ctx.arc(0,0,55+progress*45,-.9,.9);ctx.stroke();}else if(fx.type==='dash'){ctx.strokeStyle=fx.color;ctx.globalAlpha=1-progress;ctx.lineWidth=12*(1-progress)+2;ctx.beginPath();ctx.moveTo(fx.start.x,fx.start.y);ctx.lineTo(fx.end.x,fx.end.y);ctx.stroke();}else{ctx.translate(this.player.x,this.player.y);ctx.rotate(fx.facing);ctx.strokeStyle=fx.color;ctx.globalAlpha=1-progress;ctx.lineWidth=8-progress*5;ctx.beginPath();ctx.moveTo(15,20);ctx.quadraticCurveTo(65,-80-progress*35,110,-10);ctx.stroke();}ctx.restore();}
+  drawAttackFx(){
+    const fx=this.attackFx;if(!fx)return;const progress=1-fx.time/fx.max;ctx.save();ctx.globalCompositeOperation='lighter';
+    if(fx.type==='arc'){
+      ctx.translate(this.player.x,this.player.y);ctx.rotate(fx.facing);ctx.strokeStyle=fx.color;ctx.globalAlpha=1-progress;ctx.lineWidth=7-progress*4;ctx.beginPath();ctx.arc(0,0,55+progress*45,-.9,.9);ctx.stroke();
+    }else if(fx.type==='dash'){
+      const dx=fx.end.x-fx.start.x,dy=fx.end.y-fx.start.y,length=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);ctx.translate(fx.start.x,fx.start.y);ctx.rotate(angle);ctx.globalAlpha=.9*(1-progress);
+      for(let lane=-1;lane<=1;lane++){ctx.strokeStyle=lane===0?'#d6fff4':fx.color;ctx.lineWidth=lane===0?7:3;ctx.beginPath();ctx.moveTo(-36-progress*50,lane*8);ctx.lineTo(length+20-progress*length*.38,lane*13);ctx.stroke();}
+      const flash=ctx.createRadialGradient(length+12,0,2,length+12,0,34);flash.addColorStop(0,'rgba(220,255,248,.95)');flash.addColorStop(1,'rgba(85,220,196,0)');ctx.fillStyle=flash;ctx.fillRect(length-22,-34,68,68);
+    }else{
+      ctx.translate(this.player.x,this.player.y);ctx.rotate(fx.facing);ctx.globalAlpha=.9*(1-progress);const color=fx.combo?'#ffe28a':fx.color;
+      for(let lane=0;lane<3;lane++){ctx.strokeStyle=lane===0?'#fff5bb':color;ctx.lineWidth=lane===0?7:3;ctx.beginPath();ctx.moveTo(10+lane*7,20);ctx.quadraticCurveTo(62+lane*12,-92-progress*50,118+lane*10,-4);ctx.stroke();}
+      const column=ctx.createLinearGradient(42,24,88,-140);column.addColorStop(0,'rgba(104,224,197,0)');column.addColorStop(.42,fx.combo?'rgba(255,221,120,.52)':'rgba(104,224,197,.48)');column.addColorStop(1,'rgba(235,255,244,0)');ctx.fillStyle=column;ctx.beginPath();ctx.moveTo(34,18);ctx.lineTo(76,-148-progress*42);ctx.lineTo(100,8);ctx.closePath();ctx.fill();
+    }
+    ctx.restore();
+  }
   drawParticles(){for(const p of this.particles){ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}
   drawFloaters(){ctx.textAlign='center';for(const f of this.floaters){ctx.globalAlpha=Math.max(0,f.life/f.max);ctx.font=`700 ${f.size}px sans-serif`;ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=3;ctx.strokeText(f.text,f.x,f.y);ctx.fillStyle=f.color;ctx.fillText(f.text,f.x,f.y);}ctx.globalAlpha=1;}
   drawAtmosphere(w,h,time){const fog=ctx.createLinearGradient(0,h*.55,0,h);fog.addColorStop(0,'rgba(54,92,88,0)');fog.addColorStop(1,'rgba(36,72,69,.2)');ctx.fillStyle=fog;ctx.fillRect(0,0,w,h);ctx.fillStyle=`rgba(115,220,200,${.018+Math.sin(time*.5)*.006})`;for(let i=0;i<5;i++)ctx.fillRect(((time*16+i*290)% (w+350))-200,0,110,h);}

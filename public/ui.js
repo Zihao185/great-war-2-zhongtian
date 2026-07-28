@@ -10,12 +10,22 @@ const elements = {
   gold: q('#gold-value'), pearls: q('#pearl-value'), questTitle: q('#quest-title'), questCopy: q('#quest-copy'),
   challenge: q('#challenge-timer'), challengeValue: q('#challenge-timer strong'), boss: q('#boss-hud'), bossFill: q('#boss-fill'), bossPhase: q('#boss-phase'),
   musouFill: q('#musou-fill'), musouText: q('#musou-text'), dragonBlood: q('#dragon-blood'), transition: q('#region-transition'),
+  basicCooldown: q('#basic-cooldown'), dashCooldown: q('#dash-cooldown'), riseCooldown: q('#rise-cooldown'), auraCooldown: q('#aura-cooldown'),
   defeat: q('#defeat-overlay')
 };
 
 let toastTimer = 0;
 let dialogueState = null;
 let modalHandler = null;
+
+function renderCooldown(overlay, remaining, total, label = '', locked = false) {
+  const slot = overlay.parentElement;
+  const ratio = locked ? 1 : Math.max(0, Math.min(1, remaining / total));
+  overlay.style.height = `${ratio * 100}%`;
+  slot.dataset.cooldown = label;
+  slot.classList.toggle('cooling', ratio > 0 && !locked);
+  slot.classList.toggle('locked', locked);
+}
 
 export const UI = {
   showScreen(id) {
@@ -56,6 +66,14 @@ export const UI = {
     elements.weapon.textContent = weapon ? `${weapon.name} · 攻击 ${weaponAttack(save)}` : '赤手';
     elements.zone.textContent = region.name; elements.gold.textContent = save.gold; elements.pearls.textContent = save.pearls;
     elements.musouFill.style.width = `${player.musou}%`; elements.musouText.textContent = `${Math.floor(player.musou)} / 100`;
+    const weaponReady = Boolean(save.equipped?.weapon);
+    renderCooldown(elements.basicCooldown, player.attackCd, player.aura > 0 ? .27 : .54, player.attackCd > 0 ? `${player.attackCd.toFixed(1)}s` : weaponReady ? '' : '锁定', !weaponReady);
+    renderCooldown(elements.dashCooldown, player.dashCd, 3, player.dashCd > 0 ? `${player.dashCd.toFixed(1)}s` : weaponReady ? '' : '锁定', !weaponReady);
+    renderCooldown(elements.riseCooldown, player.riseCd, 5, player.riseCd > 0 ? `${player.riseCd.toFixed(1)}s` : weaponReady ? '' : '锁定', !weaponReady);
+    if (player.aura > 0) renderCooldown(elements.auraCooldown, player.aura, 5, `${player.aura.toFixed(1)}s`);
+    else if (!weaponReady) renderCooldown(elements.auraCooldown, 1, 1, '锁定', true);
+    else if (player.musou < 100) renderCooldown(elements.auraCooldown, 100 - player.musou, 100, `${Math.floor(player.musou)}%`, true);
+    else renderCooldown(elements.auraCooldown, 0, 1);
     elements.dragonBlood.classList.toggle('hidden', player.dragonBlood <= 0);
     [...elements.dragonBlood.querySelectorAll('span')].forEach((dot, index) => dot.classList.toggle('active', index < player.dragonBlood));
     elements.challenge.classList.toggle('hidden', !challenge?.active);
