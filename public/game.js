@@ -9,13 +9,13 @@ const q = (selector) => document.querySelector(selector);
 const canvas = q('#game-canvas');
 const ctx = canvas.getContext('2d');
 const playerSprite = new Image();
-playerSprite.src = '/assets/characters/yang-zihao-run-sprites-v1.png';
+playerSprite.src = '/assets/characters/yang-zihao-run-sprites-v2.webp';
 const playerSlashSprite = new Image();
-playerSlashSprite.src = '/assets/characters/yang-zihao-slash-sprites-v1.png';
+playerSlashSprite.src = '/assets/characters/yang-zihao-slash-sprites-v2.webp';
 const playerSkillSprite = new Image();
-playerSkillSprite.src = '/assets/characters/yang-zihao-skill-sprites-v1.png';
+playerSkillSprite.src = '/assets/characters/yang-zihao-skill-sprites-v2.webp';
 const playerAuraSprite = new Image();
-playerAuraSprite.src = '/assets/characters/yang-zihao-aura-sprites-v1.png';
+playerAuraSprite.src = '/assets/characters/yang-zihao-aura-sprites-v2.webp';
 const keys = new Set();
 let authMode = 'login';
 let entryIntent = 'new';
@@ -497,4 +497,4 @@ document.addEventListener('gw2-modal-action',async event=>{
 });
 window.addEventListener('beforeunload',()=>{if(game?.unsaved){const body=JSON.stringify({hero:game.save.hero,region:game.save.region,checkpoint:game.save.checkpoint,quest:game.save.quest,health:Math.max(1,Math.round(game.player.hp))});navigator.sendBeacon('/api/save',new Blob([body],{type:'application/json'}));}});
 
-setAuthMode('login');checkServer();
+setAuthMode('login');checkServer();preloadWorldArt().catch(() => {});

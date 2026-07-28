@@ -8,7 +8,7 @@ test('every playable region has a local cursed-community art definition', () => 
   for (const id of ids) {
     const entry = worldArtDefinition(id);
     assert.ok(entry.src.startsWith('/assets/world/'));
-    assert.match(entry.src, /-v1\.png$/);
+    assert.match(entry.src, /-v2\.webp$/);
     assert.ok(entry.ratio.length > 0);
   }
 });
