@@ -1,24 +1,18 @@
 #!/bin/zsh
-set -e
+set -euo pipefail
 cd "$(dirname "$0")"
+source ./scripts/public-url.sh
 
-node server.mjs &
-SERVER_PID=$!
+SERVER_PID=""
+if ! /usr/bin/curl --silent --fail --max-time 3 http://127.0.0.1:3100/api/health >/dev/null; then
+  /opt/homebrew/bin/node server.mjs &
+  SERVER_PID="$!"
+fi
 
 cleanup() {
-  kill "$SERVER_PID" 2>/dev/null || true
+  [[ -n "$SERVER_PID" ]] && kill "$SERVER_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-sleep 1
-echo ""
-echo "服务已启动。下面将生成公网 HTTPS 地址："
-if ! /opt/homebrew/bin/cloudflared tunnel --url http://127.0.0.1:3100; then
-  echo ""
-  echo "Cloudflare 当前不可用，正在切换 Serveo 公网隧道……"
-  if ! ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -R 80:127.0.0.1:3100 serveo.net; then
-    echo ""
-    echo "Serveo 当前不可用，正在尝试最后的备用公网隧道……"
-    ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -R 80:127.0.0.1:3100 nokey@localhost.run
-  fi
-fi
+echo "固定公网地址：$GREAT_WAR_2_PUBLIC_URL"
+./scripts/run-tunnel.sh

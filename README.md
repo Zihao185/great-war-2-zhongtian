@@ -10,19 +10,19 @@
 http://127.0.0.1:3100
 ```
 
-双击 `start-public.command` 会同时启动游戏和公网隧道。脚本优先使用 Cloudflare；若当前网络无法连接 Cloudflare，会自动切换至 Serveo，最后才尝试 localhost.run。终端出现 `https://...trycloudflare.com`、`https://...serveousercontent.com` 或 `https://...lhr.life` 地址后，任何人都可以通过该地址注册和游玩。关闭终端或按 `Control+C` 后，公网地址停止服务。
+双击 `start-public.command` 会启动游戏和 ngrok 公网隧道。当前固定公网地址为：
+
+```text
+https://washing-apron-dipping.ngrok-free.dev
+```
+
+任何人都可以通过该 HTTPS 地址注册和游玩。关闭终端或按 `Control+C` 后，前台隧道停止；使用下方的后台常驻方式可自动恢复。
 
 ## 后台常驻
 
-双击 `install-background.command` 一次，会将游戏服务与 Serveo 隧道注册为当前 macOS 用户的 LaunchAgent。此后用户登录时会自动启动；进程意外退出会在短暂间隔后自动重试。双击 `status-background.command` 可以查看服务状态和最新公网地址。
+双击 `install-background.command` 一次，会将游戏服务与 ngrok 隧道注册为当前 macOS 用户的 LaunchAgent。此后用户登录时会自动启动；进程意外退出会在短暂间隔后自动重试。双击 `status-background.command` 可以查看服务状态、固定地址和日志位置。
 
-临时隧道的公网域名会在重连、电脑重启或网络切换后变化，最新地址记录在：
-
-```text
-~/Library/Logs/great-war-2-tunnel.log
-```
-
-要使用永不变化的地址，需要用户提供 Cloudflare 账号和自己的域名，以创建命名隧道。
+ngrok 免费账户为本账号自动分配并保留该 `ngrok-free.dev` 地址；本版本已验证隧道重连后地址不变。免费方案不支持自定义名称。电脑关机、休眠、未登录 macOS、断网或 ngrok 服务故障期间，玩家不能访问；恢复后后台服务会重连至同一地址。
 
 ## 存档
 
