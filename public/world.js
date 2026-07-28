@@ -1,0 +1,136 @@
+import { SECURITY_SURVIVAL_SECONDS } from './rules.js';
+
+const BUILDINGS = [
+  { number: '9', x: 620, y: 420, tone: '#376d6a' },
+  { number: '8', x: 1800, y: 390, tone: '#bda356' },
+  { number: '7', x: 2940, y: 440, tone: '#ad6247' },
+  { number: '6', x: 650, y: 1140, tone: '#71806f' },
+  { number: '5', x: 1800, y: 900, tone: '#376d6a' },
+  { number: '4', x: 2940, y: 1160, tone: '#71806f' },
+  { number: '3', x: 650, y: 1840, tone: '#376d6a' },
+  { number: '2', x: 1800, y: 1990, tone: '#bda356', open: true },
+  { number: '1', x: 2940, y: 1910, tone: '#ad6247' }
+];
+
+export const REGIONS = Object.freeze({
+  platform: { id: 'platform', name: '中天帝都 · 台子', width: 3600, height: 2500, spawn: { x: 1800, y: 1420 }, checkpoint: 'platform_start' },
+  security: { id: 'security', name: '西南禁区 · 保安处', width: 1320, height: 860, spawn: { x: 180, y: 430 }, checkpoint: 'security_entry' },
+  building2_floor1: { id: 'building2_floor1', name: '2 号楼 · 失序大厅', width: 1800, height: 1100, spawn: { x: 150, y: 550 }, checkpoint: 'floor1_entry' },
+  building2_floor2: { id: 'building2_floor2', name: '2 号楼 · 回声走廊', width: 1900, height: 980, spawn: { x: 150, y: 490 }, checkpoint: 'floor2_entry' },
+  building2_boss: { id: 'building2_boss', name: '2 号楼 · 犬神办公室', width: 1500, height: 920, spawn: { x: 180, y: 460 }, checkpoint: 'boss_entry' }
+});
+
+function seed(value) { const x = Math.sin(value * 915.73) * 43758.5453; return x - Math.floor(x); }
+const PLATFORM_DEBRIS = Array.from({ length: 230 }, (_, i) => ({ x: 80 + seed(i * 3 + 1) * 3440, y: 80 + seed(i * 3 + 2) * 2340, r: 1 + seed(i * 3 + 3) * 8 }));
+
+export function getInteractions(regionId) {
+  if (regionId === 'platform') return [
+    { id: 'wang_ziyi', type: 'npc', x: 1800, y: 1160, radius: 92, label: '与王子毅交谈' },
+    { id: 'shop', type: 'shop', x: 2070, y: 1320, radius: 90, label: '打开军需商店' },
+    { id: 'forge', type: 'forge', x: 1530, y: 1320, radius: 90, label: '使用帝都锻造台' },
+    { id: 'teleporter', type: 'teleporter', x: 1800, y: 1420, radius: 88, label: '查看台子传送阵' },
+    { id: 'security_gate', type: 'portal', x: 390, y: 2210, radius: 110, label: '前往保安处', target: 'security' },
+    { id: 'building2_gate', type: 'portal', x: 1800, y: 2105, radius: 115, label: '进入 2 号楼', target: 'building2_floor1' },
+    ...BUILDINGS.filter(b => b.number !== '2').map(b => ({ id: `locked_${b.number}`, type: 'locked', x: b.x, y: b.y + 135, radius: 100, label: `${b.number} 号楼 · 尚未开放`, number: b.number }))
+  ];
+  if (regionId === 'security') return [{ id: 'security_exit', type: 'portal', x: 90, y: 430, radius: 76, label: '返回中天台子', target: 'platform' }];
+  if (regionId === 'building2_floor1') return [
+    { id: 'floor1_exit', type: 'portal', x: 1690, y: 550, radius: 88, label: '进入回声走廊', target: 'building2_floor2', requiresClear: true },
+    { id: 'floor1_return', type: 'portal', x: 80, y: 550, radius: 70, label: '退出副本', target: 'platform' }
+  ];
+  if (regionId === 'building2_floor2') return [
+    { id: 'floor2_exit', type: 'portal', x: 1790, y: 490, radius: 88, label: '进入犬神办公室', target: 'building2_boss', requiresClear: true },
+    { id: 'floor2_return', type: 'portal', x: 80, y: 490, radius: 70, label: '退出副本', target: 'platform' }
+  ];
+  return [{ id: 'boss_return', type: 'portal', x: 80, y: 460, radius: 70, label: '退出副本', target: 'platform' }];
+}
+
+export function createRegionEnemies(regionId) {
+  const make = (type, x, y, index) => {
+    const configs = {
+      hall_patrol: { name: '安保残影', hp: 105, speed: 92, damage: 14, r: 21, goldType: 'hall_patrol' },
+      security_echo: { name: '失序巡逻', hp: 125, speed: 82, damage: 16, r: 22, goldType: 'security_echo' },
+      corridor_archer: { name: '回声射手', hp: 90, speed: 67, damage: 13, r: 19, goldType: 'corridor_archer', ranged: true },
+      zigou: { name: '子狗', hp: 1380, speed: 88, damage: 24, r: 47, boss: true }
+    }[type];
+    return { id: `${type}_${index}`, type, x, y, maxHp: configs.hp, hp: configs.hp, vx: 0, vy: 0, attackCd: .5 + seed(index) * .7, hitFlash: 0, airborne: 0, dead: false, phaseTimer: 2, dashTimer: 0, ...configs };
+  };
+  if (regionId === 'building2_floor1') return [
+    make('hall_patrol', 510, 300, 1), make('hall_patrol', 760, 720, 2), make('hall_patrol', 990, 330, 3),
+    make('hall_patrol', 1220, 710, 4), make('hall_patrol', 1400, 420, 5), make('security_echo', 920, 540, 6)
+  ];
+  if (regionId === 'building2_floor2') return [
+    make('corridor_archer', 560, 220, 1), make('hall_patrol', 720, 490, 2), make('corridor_archer', 900, 760, 3),
+    make('security_echo', 1110, 360, 4), make('corridor_archer', 1370, 220, 5), make('security_echo', 1510, 660, 6)
+  ];
+  if (regionId === 'building2_boss') return [make('zigou', 1120, 460, 1)];
+  return [];
+}
+
+function drawLamp(ctx, x, y, time, red = false) {
+  const pulse = .7 + Math.sin(time * 3 + x) * .12;
+  ctx.fillStyle = '#1c282a'; ctx.fillRect(x - 3, y, 6, 42);
+  const color = red ? [226, 76, 62] : [103, 224, 196];
+  const glow = ctx.createRadialGradient(x, y, 2, x, y, 48);
+  glow.addColorStop(0, `rgba(${color.join(',')},${pulse})`); glow.addColorStop(1, `rgba(${color.join(',')},0)`);
+  ctx.fillStyle = glow; ctx.fillRect(x - 48, y - 48, 96, 96);
+  ctx.fillStyle = red ? '#f27968' : '#9af2dc'; ctx.fillRect(x - 3, y - 3, 6, 7);
+}
+
+function drawBuilding(ctx, building, time) {
+  const w = 300, h = 245, x = building.x - w / 2, y = building.y - h / 2;
+  ctx.fillStyle = 'rgba(0,0,0,.34)'; ctx.fillRect(x + 18, y + 22, w, h);
+  const facade = ctx.createLinearGradient(x, y, x + w, y + h); facade.addColorStop(0, '#17262b'); facade.addColorStop(1, '#0b1519');
+  ctx.fillStyle = facade; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = building.open ? 'rgba(227,190,101,.7)' : `${building.tone}aa`; ctx.lineWidth = 4; ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = building.tone; ctx.globalAlpha = .24; ctx.fillRect(x + 12, y + 12, w - 24, 40); ctx.globalAlpha = 1;
+  for (let row = 0; row < 3; row++) for (let col = 0; col < 6; col++) {
+    const active = seed(Number(building.number) * 70 + row * 8 + col) > .38;
+    ctx.fillStyle = active ? (building.open ? 'rgba(255,216,122,.62)' : 'rgba(104,205,187,.34)') : '#071014';
+    ctx.fillRect(x + 25 + col * 43, y + 71 + row * 42, 24, 19);
+  }
+  ctx.fillStyle = building.open ? '#be8e3d' : '#233238'; ctx.fillRect(building.x - 29, y + h - 55, 58, 55);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#e8d49e'; ctx.font = '700 49px serif'; ctx.fillText(building.number, building.x, y + 57);
+  ctx.font = '10px sans-serif'; ctx.fillStyle = building.open ? '#eacb7c' : '#73827f'; ctx.fillText(building.open ? '副本已开放' : '封印中', building.x, y + h + 22);
+  if (building.open) drawLamp(ctx, x + 25, y + h - 12, time); else drawLamp(ctx, x + 25, y + h - 12, time, true);
+}
+
+function drawPlatformRegion(ctx, time) {
+  const bg = ctx.createLinearGradient(0, 0, 3600, 2500); bg.addColorStop(0, '#0c2528'); bg.addColorStop(.55, '#102326'); bg.addColorStop(1, '#171c22');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 3600, 2500);
+  ctx.strokeStyle = 'rgba(109,218,196,.06)'; ctx.lineWidth = 1;
+  for (let x = 0; x < 3600; x += 90) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 2500); ctx.stroke(); }
+  for (let y = 0; y < 2500; y += 90) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(3600, y); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(201,161,80,.17)'; ctx.lineWidth = 62; ctx.lineCap = 'round';
+  for (const point of [[620,420],[1800,390],[2940,440],[650,1140],[1800,900],[2940,1160],[650,1840],[1800,1990],[2940,1910],[390,2210]]) {
+    ctx.beginPath(); ctx.moveTo(1800,1320); ctx.lineTo(point[0],point[1]); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(24,40,39,.82)'; ctx.lineWidth = 40;
+  for (const point of [[620,420],[1800,390],[2940,440],[650,1140],[1800,900],[2940,1160],[650,1840],[1800,1990],[2940,1910],[390,2210]]) {
+    ctx.beginPath(); ctx.moveTo(1800,1320); ctx.lineTo(point[0],point[1]); ctx.stroke();
+  }
+  for (const debris of PLATFORM_DEBRIS) { ctx.fillStyle = debris.r > 5 ? 'rgba(44,73,67,.55)' : 'rgba(112,144,132,.2)'; ctx.beginPath(); ctx.arc(debris.x,debris.y,debris.r,0,Math.PI*2); ctx.fill(); }
+  for (const building of BUILDINGS) drawBuilding(ctx, building, time);
+  ctx.fillStyle = '#121e22'; ctx.fillRect(230, 2080, 320, 235); ctx.strokeStyle = '#b45b48'; ctx.lineWidth = 4; ctx.strokeRect(230,2080,320,235);
+  ctx.fillStyle = '#8d493e'; ctx.fillRect(268,2118,244,46); ctx.fillStyle = '#f0c878'; ctx.font = '700 24px serif'; ctx.textAlign = 'center'; ctx.fillText('保 安 处',390,2151);
+  ctx.font = '10px sans-serif'; ctx.fillStyle = '#b37d66'; ctx.fillText('反弹弹幕训练禁区',390,2335);
+  const g = ctx.createRadialGradient(1800,1320,20,1800,1320,230); g.addColorStop(0,'rgba(225,184,88,.23)'); g.addColorStop(1,'rgba(225,184,88,0)'); ctx.fillStyle=g;ctx.fillRect(1570,1090,460,460);
+  ctx.fillStyle='#17252a';ctx.beginPath();ctx.moveTo(1600,1250);ctx.lineTo(1800,1130);ctx.lineTo(2000,1250);ctx.lineTo(2000,1450);ctx.lineTo(1600,1450);ctx.closePath();ctx.fill();ctx.strokeStyle='#c49542';ctx.lineWidth=5;ctx.stroke();
+  ctx.strokeStyle='rgba(240,202,112,.5)';ctx.lineWidth=2;for(let r=45;r<=130;r+=42){ctx.beginPath();ctx.arc(1800,1360,r,0,Math.PI*2);ctx.stroke();}
+  ctx.fillStyle='#ebd18a';ctx.font='700 20px serif';ctx.fillText('中 天 台 子',1800,1110);
+  drawStall(ctx,2070,1320,'军需商店','#63c8b4'); drawStall(ctx,1530,1320,'帝都锻造','#d49c50');
+  drawNpc(ctx,1800,1160);
+}
+
+function drawStall(ctx,x,y,label,color){ctx.fillStyle='#0d171b';ctx.fillRect(x-70,y-45,140,90);ctx.strokeStyle=color;ctx.lineWidth=3;ctx.strokeRect(x-70,y-45,140,90);ctx.fillStyle=color;ctx.fillRect(x-58,y-31,116,6);ctx.fillStyle='#d9d3c1';ctx.font='12px serif';ctx.textAlign='center';ctx.fillText(label,x,y+15);}
+function drawNpc(ctx,x,y){ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(x,y+22,28,10,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#813f3d';ctx.beginPath();ctx.moveTo(x-22,y+20);ctx.lineTo(x-14,y-30);ctx.lineTo(x+14,y-30);ctx.lineTo(x+23,y+20);ctx.closePath();ctx.fill();ctx.strokeStyle='#d9a750';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#c9936e';ctx.beginPath();ctx.arc(x,y-43,14,0,Math.PI*2);ctx.fill();ctx.fillStyle='#20262a';ctx.beginPath();ctx.arc(x-1,y-49,15,Math.PI,0);ctx.fill();ctx.fillStyle='#f1c86d';ctx.font='700 13px serif';ctx.textAlign='center';ctx.fillText('王子毅',x,y+44);}
+
+function drawSecurity(ctx,time){const g=ctx.createLinearGradient(0,0,1320,860);g.addColorStop(0,'#1b1b20');g.addColorStop(1,'#241518');ctx.fillStyle=g;ctx.fillRect(0,0,1320,860);ctx.fillStyle='#301f22';ctx.fillRect(65,65,1190,730);ctx.strokeStyle='#b55a4c';ctx.lineWidth=8;ctx.strokeRect(65,65,1190,730);ctx.strokeStyle='rgba(222,103,83,.13)';ctx.lineWidth=1;for(let x=110;x<1250;x+=70){ctx.beginPath();ctx.moveTo(x,65);ctx.lineTo(x,795);ctx.stroke();}for(let y=110;y<795;y+=70){ctx.beginPath();ctx.moveTo(65,y);ctx.lineTo(1255,y);ctx.stroke();}ctx.fillStyle='rgba(226,78,65,.08)';ctx.font='700 140px sans-serif';ctx.textAlign='center';ctx.fillText('禁 区',660,475);for(const p of [[95,95],[1225,95],[95,765],[1225,765]])drawLamp(ctx,p[0],p[1],time,true);ctx.fillStyle='#dd7564';ctx.font='700 13px sans-serif';ctx.fillText(`连续 ${SECURITY_SURVIVAL_SECONDS} 秒无伤 · 子弹触墙反弹`,660,105);}
+
+function drawDungeon(ctx,regionId,time){const region=REGIONS[regionId];const boss=regionId==='building2_boss';const floor2=regionId==='building2_floor2';const g=ctx.createLinearGradient(0,0,region.width,region.height);g.addColorStop(0,boss?'#25131a':'#101a20');g.addColorStop(1,boss?'#11080d':'#172529');ctx.fillStyle=g;ctx.fillRect(0,0,region.width,region.height);ctx.fillStyle=boss?'#3a1c25':'#1a2a2d';ctx.fillRect(55,55,region.width-110,region.height-110);ctx.strokeStyle=boss?'#a4474d':'#4b8f84';ctx.lineWidth=7;ctx.strokeRect(55,55,region.width-110,region.height-110);ctx.strokeStyle=boss?'rgba(193,69,76,.12)':'rgba(93,189,169,.1)';ctx.lineWidth=1;for(let x=100;x<region.width-80;x+=80){ctx.beginPath();ctx.moveTo(x,55);ctx.lineTo(x,region.height-55);ctx.stroke();}for(let y=100;y<region.height-80;y+=80){ctx.beginPath();ctx.moveTo(55,y);ctx.lineTo(region.width-55,y);ctx.stroke();}if(floor2){for(let x=400;x<1600;x+=400){ctx.fillStyle='#0a1317';ctx.fillRect(x,170,55,640);ctx.strokeStyle='rgba(98,211,188,.22)';ctx.strokeRect(x,170,55,640);}}if(boss){const aura=ctx.createRadialGradient(1120,460,20,1120,460,330);aura.addColorStop(0,'rgba(190,56,63,.18)');aura.addColorStop(1,'rgba(190,56,63,0)');ctx.fillStyle=aura;ctx.fillRect(760,100,720,720);ctx.fillStyle='rgba(222,81,72,.1)';ctx.font='700 190px serif';ctx.textAlign='center';ctx.fillText('犬',1050,550);}ctx.fillStyle=boss?'#d66a63':'#77cdb9';ctx.font='700 13px serif';ctx.textAlign='center';ctx.fillText(region.name,region.width/2,95);}
+
+export function drawRegion(ctx, regionId, time) {
+  if (regionId === 'platform') drawPlatformRegion(ctx,time);
+  else if (regionId === 'security') drawSecurity(ctx,time);
+  else drawDungeon(ctx,regionId,time);
+}

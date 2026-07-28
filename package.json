@@ -1,0 +1,13 @@
+{
+  "name": "great-war-2-zhongtian",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=23.0.0"
+  }
+}

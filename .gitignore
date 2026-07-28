@@ -1,0 +1,15 @@
+# macOS metadata
+.DS_Store
+
+# Local player accounts and save data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Runtime output and local credentials
+*.log
+.env
+.env.*
+.ngrok.yml
+ngrok.yml

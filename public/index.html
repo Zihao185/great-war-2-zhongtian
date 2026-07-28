@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#071014" />
+  <title>伟大的战争 2：中天争霸</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main id="app">
+    <section id="title-screen" class="screen active" aria-label="游戏标题">
+      <div class="city-backdrop" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="title-fog fog-a"></div><div class="title-fog fog-b"></div>
+      <div class="title-crest" aria-hidden="true"><span>中</span></div>
+      <div class="title-content">
+        <p class="overline">THE WAR OF ZHONGTIAN</p>
+        <h1><small>伟大的战争 2</small>中天争霸</h1>
+        <p class="title-copy">帝都九楼沉入长夜。王者尚未加冕，犬神已经醒来。</p>
+        <div class="title-actions">
+          <button id="new-game-button" class="primary-button" type="button"><span>开始游戏</span><small>NEW CAMPAIGN</small></button>
+          <button id="continue-button" class="secondary-button" type="button"><span>存档</span><small>CONTINUE</small></button>
+        </div>
+        <p id="server-status" class="server-status"><i></i> 正在确认中天档案馆状态</p>
+      </div>
+      <p class="build-mark">ZHONGTIAN IMPERIAL ARCHIVE · BUILD 01</p>
+    </section>
+
+    <section id="auth-screen" class="screen" aria-label="账号登录">
+      <div class="panel auth-panel">
+        <button class="text-button back-title" data-action="back-title" type="button">返回标题</button>
+        <p class="overline">IMPERIAL ARCHIVE</p>
+        <h2 id="auth-title">进入中天档案馆</h2>
+        <p id="auth-copy" class="panel-copy">登录后，存档会保存在这台中天主机上。</p>
+        <div class="auth-tabs">
+          <button id="login-tab" class="active" type="button">登录</button>
+          <button id="register-tab" type="button">注册</button>
+        </div>
+        <form id="auth-form">
+          <label>账号<input id="username" name="username" autocomplete="username" minlength="3" maxlength="20" placeholder="3–20 位文字或数字" required /></label>
+          <label>密码<input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="64" placeholder="至少 8 位" required /></label>
+          <p id="auth-error" class="form-error" role="alert"></p>
+          <button id="auth-submit" class="primary-button compact" type="submit"><span>登录</span><small>ENTER</small></button>
+        </form>
+      </div>
+    </section>
+
+    <section id="hero-screen" class="screen" aria-label="选择英雄">
+      <header class="select-header"><p class="overline">IMPERIAL ROSTER</p><h2>选择你的英雄</h2><p>每一场伟大的战争，都始于一个名字。</p></header>
+      <div class="hero-grid">
+        <article class="hero-card playable" data-hero="yang_zihao">
+          <div class="hero-art hero-yang"><i class="aura"></i><i class="head"></i><i class="body"></i><i class="sword"></i></div>
+          <div class="hero-number">01</div><p class="role">近战 · 帝王剑</p><h3>杨子豪</h3>
+          <p>以突进撕开阵线，用升龙重置攻势。无双满盈时，以帝气君临战场。</p>
+          <div class="hero-skills"><span>突进</span><span>升龙</span><span>帝气</span></div>
+          <button id="select-yang" class="primary-button compact" type="button"><span>选择杨子豪</span><small>CONFIRM</small></button>
+        </article>
+        <article class="hero-card locked">
+          <div class="hero-art hero-xia"><i class="head"></i><i class="body"></i></div>
+          <div class="hero-number">02</div><p class="role">档案封存</p><h3>夏鸣健</h3><p>英雄档案尚未解封。</p><div class="locked-label">后续上线</div>
+        </article>
+        <article class="hero-card locked">
+          <div class="hero-art hero-zhang"><i class="head"></i><i class="body"></i></div>
+          <div class="hero-number">03</div><p class="role">档案封存</p><h3>张锐</h3><p>英雄档案尚未解封。</p><div class="locked-label">后续上线</div>
+        </article>
+      </div>
+      <button class="text-button hero-logout" data-action="logout" type="button">退出账号</button>
+    </section>
+
+    <section id="game-screen" class="screen" aria-label="中天帝都">
+      <canvas id="game-canvas"></canvas>
+      <div class="game-vignette"></div><div class="rain-layer"></div>
+      <header id="top-hud">
+        <div class="hero-hud angular-panel">
+          <div class="hero-monogram">杨</div>
+          <div class="hero-vitals"><div class="hud-line"><strong>杨子豪</strong><span id="weapon-label">赤手</span></div><div class="meter hp-meter"><i id="hp-fill"></i></div><small id="hp-text">生命 160 / 160</small></div>
+        </div>
+        <div class="zone-hud"><small>当前位置</small><strong id="zone-name">中天台子</strong><span id="save-state" class="save-state">尚未存档</span></div>
+        <div class="resource-hud angular-panel"><div><small>金币</small><strong id="gold-value">0</strong></div><div><small>子狗灵珠</small><strong id="pearl-value">0</strong></div><button id="inventory-button" type="button">装备</button></div>
+      </header>
+      <aside id="quest-hud" class="angular-panel"><small>当前使命</small><h3 id="quest-title">风起中天</h3><p id="quest-copy">寻找台子上的王子毅。</p><div id="challenge-timer" class="challenge-timer hidden"><span>无伤计时</span><strong>00:00.0</strong></div></aside>
+      <div id="boss-hud" class="boss-hud hidden"><small>犬神办公室 · 最终首领</small><div><strong>子狗</strong><span id="boss-phase">第一阶段</span></div><div class="meter boss-meter"><i id="boss-fill"></i></div></div>
+      <div id="skill-dock">
+        <div class="musou"><span>无双</span><div class="meter"><i id="musou-fill"></i></div><strong id="musou-text">0 / 100</strong></div>
+        <div class="skill" data-key="SPACE"><kbd>空格</kbd><strong>普攻</strong><i id="basic-cooldown"></i></div>
+        <div class="skill" data-key="Q"><kbd>Q</kbd><strong>突进</strong><i id="dash-cooldown"></i></div>
+        <div class="skill" data-key="E"><kbd>E</kbd><strong>升龙</strong><i id="rise-cooldown"></i></div>
+        <div class="skill ultimate" data-key="R"><kbd>R</kbd><strong>帝气</strong><i id="aura-cooldown"></i></div>
+        <div id="dragon-blood" class="dragon-blood hidden"><small>龙血</small><span></span><span></span><span></span></div>
+      </div>
+      <div id="interaction-prompt" class="interaction-prompt hidden"><kbd>F</kbd><span></span></div>
+      <div id="game-toast" class="game-toast" role="status"></div>
+      <div id="region-transition" class="region-transition"><span>正在穿越帝都</span></div>
+
+      <section id="dialogue" class="dialogue" aria-live="polite">
+        <div class="npc-portrait"><i class="cape"></i><i class="face"></i><i class="hair"></i></div>
+        <div><small id="dialogue-role">中天守备官</small><h3 id="dialogue-speaker">王子毅</h3><p id="dialogue-text"></p><div class="dialogue-next"><kbd>F</kbd><span>继续</span></div></div>
+      </section>
+
+      <section id="modal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-card"><button id="modal-close" class="modal-close" type="button" aria-label="关闭">&times;</button><p id="modal-kicker" class="overline"></p><h2 id="modal-title"></h2><div id="modal-content"></div></div>
+      </section>
+      <section id="defeat-overlay" class="defeat-overlay"><div><p class="overline">IMPERIAL CASUALTY REPORT</p><h2>帝气未绝</h2><p>你被送回最近的中天检查点。整理呼吸，再度出剑。</p><button id="respawn-button" class="primary-button compact" type="button"><span>返回检查点</span><small>RESPAWN</small></button></div></section>
+    </section>
+
+    <section id="loading-screen" class="screen loading-screen"><div class="loading-seal">中</div><p>正在读取中天档案</p></section>
+  </main>
+  <script type="module" src="/game.js"></script>
+</body>
+</html>
