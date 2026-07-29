@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SECURITY_SURVIVAL_SECONDS, actualDamage, lifeStealAmount, reflectBullet, segmentCircleHit, weaponAttack } from '../public/rules.js';
+import { REGIONS, createRegionEnemies, createRegionHazards, getInteractions, getRegionWalls } from '../public/world.js';
 
 test('security challenge requires thirty uninterrupted seconds', () => {
   assert.equal(SECURITY_SURVIVAL_SECONDS, 30);
@@ -30,4 +31,18 @@ test('client mirrors the three-rank imperial sword attack table and lifesteal bo
   assert.equal(lifeStealAmount(equipped(3)), 30);
   assert.equal(actualDamage(100, 0.42, false), 58);
   assert.equal(actualDamage(100, 0.42, true), 29);
+});
+
+test('building one has five floors, an attic route, walls, traps, and archer pressure', () => {
+  for (const id of ['building1_floor1', 'building1_floor2', 'building1_floor3', 'building1_floor4', 'building1_floor5', 'building1_attic']) assert.ok(REGIONS[id]);
+  assert.ok(getRegionWalls('building1_floor3').length >= 4);
+  assert.ok(createRegionHazards('building1_floor1').some(hazard => hazard.type === 'spike'));
+  assert.ok(createRegionHazards('building1_floor3').some(hazard => hazard.type === 'fire'));
+  assert.ok(createRegionEnemies('building1_floor3').filter(enemy => enemy.ranged).length >= 5);
+  assert.ok(createRegionEnemies('building1_floor2').some(enemy => enemy.bossId === 'pang'));
+  assert.ok(createRegionEnemies('building1_floor5').some(enemy => enemy.bossId === 'youkai'));
+  assert.ok(createRegionEnemies('building1_attic').some(enemy => enemy.bossId === 'dean'));
+  assert.equal(getInteractions('building1_floor4', { atticKeys: 0, atticUnlocked: false }).some(item => item.type === 'altar'), false);
+  assert.equal(getInteractions('building1_floor4', { atticKeys: 1, atticUnlocked: false }).some(item => item.type === 'altar'), true);
+  assert.equal(getInteractions('building1_floor5', { atticUnlocked: true }).some(item => item.target === 'building1_attic'), true);
 });

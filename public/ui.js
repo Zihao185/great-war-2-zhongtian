@@ -81,7 +81,7 @@ export const UI = {
       const seconds = Math.max(0, challenge.time); elements.challengeValue.textContent = `00:${seconds.toFixed(1).padStart(4, '0')}`;
     }
     elements.boss.classList.toggle('hidden', !boss);
-    if (boss) { elements.bossFill.style.width = `${Math.max(0, boss.hp / boss.maxHp * 100)}%`; elements.bossPhase.textContent = boss.hp <= boss.maxHp / 2 ? '狂躁阶段' : '第一阶段'; }
+    if (boss) { elements.boss.querySelector('strong').textContent = boss.name; elements.boss.querySelector('small').textContent = region.name; elements.bossFill.style.width = `${Math.max(0, boss.hp / boss.maxHp * 100)}%`; elements.bossPhase.textContent = boss.hp <= boss.maxHp / 2 ? '狂躁阶段' : '第一阶段'; }
   },
   setQuest(title, copy) { elements.questTitle.textContent = title; elements.questCopy.textContent = copy; },
   showDefeat(show) { elements.defeat.classList.toggle('open', show); },
@@ -125,8 +125,12 @@ export const UI = {
     this.openModal('IMPERIAL FORGE', '台子 · 锻造与兑换', `<div class="forge-hero"><div class="forge-sword">帝</div><div><small>当前金币 ${save.gold} · 当前灵珠 ${save.pearls}</small><h3>帝王剑 · ${rank} 阶</h3><p>${attackCopy}</p></div></div><div class="forge-actions"><article><small>帝王剑升阶</small><h3>${!hasSword ? '帝锋未授' : max ? '帝锋已成' : rank === 2 ? '五珠破境' : '金币淬锋'}</h3><p>${forgeCopy}</p><button data-action="forge" ${max || !hasSword || !affordable ? 'disabled' : ''}>${costLabel}</button></article><article><small>传说护甲保底</small><h3>五珠唤天犬</h3><p>消耗 5 颗子狗灵珠，兑换减伤 42% 的天犬甲。</p><button data-action="exchange" ${save.pearls < 5 || save.inventory.includes('heavenly_hound_armor') ? 'disabled' : ''}>消耗 5 灵珠</button></article></div>`, null);
   },
   showBossLoot(result) {
-    const loot = [`金币 +${result.gold}`]; if (result.pearls) loot.push('子狗灵珠 +1'); if (result.armor) loot.push('天犬甲直接掉落');
-    this.openModal('BOSS DEFEATED', '子狗 · 伏诛', `<div class="boss-loot"><div class="loot-seal">犬</div><p>犬神办公室重新归于寂静。</p><div>${loot.map(text => `<span>${text}</span>`).join('')}</div><button data-action="close-loot">返回中天台子</button></div>`, null);
+    const loot = [`金币 +${result.gold}`]; if (result.pearls) loot.push('子狗灵珠 +1'); if (result.armor) loot.push('天犬甲直接掉落'); if (result.key) loot.push('阁楼钥匙 +1'); if (result.letter) loot.push('院长的来信');
+    const titles = { zigou: ['子狗 · 伏诛', '犬神办公室重新归于寂静。'], pang: ['小胖 · 倒下', '旧院长办公室的厚重回声终于散去。'], youkai: ['魔王尤恺 · 伏诛', result.key ? '火焰褪去，一把阁楼钥匙落在灰烬中。' : '天台暂时安静下来，但阁楼仍在低语。'], dean: ['黑化院长 · 清醒', '他从黑暗中醒来，阁楼的禁书终于合上。'] };
+    const [title, copy] = titles[result.bossId] || titles.zigou;
+    const letter = result.letter ? '<p>院长的来信：“我曾守住 1 号楼，却正在被黑暗吞没。不要相信阁楼里的低语。”封印已经解除。</p>' : '';
+    const button = result.nextRegion ? '继续向 3 楼推进' : result.stayInRegion ? (result.vortex ? '查看阁楼漩涡' : '留在天台') : '返回中天台子';
+    this.openModal('BOSS DEFEATED', title, `<div class="boss-loot"><div class="loot-seal">${result.bossId==='dean'?'院':result.bossId==='youkai'?'焰':result.bossId==='pang'?'胖':'犬'}</div><p>${copy}</p>${letter}<div>${loot.map(text => `<span>${text}</span>`).join('')}</div><button data-action="close-loot">${button}</button></div>`, null);
   }
 };
 

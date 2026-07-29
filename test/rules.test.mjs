@@ -60,6 +60,44 @@ test('save sanitation caps historical sword ranks at three', () => {
   assert.equal(getWeaponAttack(save), 60);
 });
 
+test('first Zigou clear unlocks building one and grants the dean letter only once', () => {
+  const initial = { ...createInitialSave(), quest: 'building2_active' };
+  const first = applyAction(initial, { type: 'boss_clear', bossId: 'zigou', armorRoll: .5, pearlRoll: .5 }).save;
+  assert.equal(first.building1Unlocked, true);
+  assert.equal(first.deanLetterReceived, true);
+  assert.ok(first.unlockedRegions.includes('building1_floor1'));
+  const second = applyAction(first, { type: 'boss_clear', bossId: 'zigou', armorRoll: .5, pearlRoll: .5 });
+  assert.equal(second.result.letter, false);
+  assert.equal(second.save.bossClears, 2);
+});
+
+test('Youkai key, altar, dean reward, and dean failure are server controlled', () => {
+  const base = { ...createInitialSave(), building1Unlocked: true, deanLetterReceived: true, unlockedRegions: ['platform', 'security', 'building1_floor1'] };
+  const keyDrop = applyAction(base, { type: 'boss_clear', bossId: 'youkai', keyRoll: .4999 });
+  assert.equal(keyDrop.save.atticKeys, 1);
+  assert.equal(keyDrop.result.key, true);
+  const noKeyDrop = applyAction(base, { type: 'boss_clear', bossId: 'youkai', keyRoll: .5 });
+  assert.equal(noKeyDrop.save.atticKeys, 0);
+  const altar = applyAction(keyDrop.save, { type: 'activate_attic' }).save;
+  assert.deepEqual([altar.atticKeys, altar.atticUnlocked], [0, true]);
+  const dean = applyAction({ ...altar, gold: 25 }, { type: 'boss_clear', bossId: 'dean' }).save;
+  assert.deepEqual([dean.gold, dean.deanDefeats], [525, 1]);
+  const failure = applyAction({ ...dean, gold: 120 }, { type: 'dean_failure' }).save;
+  assert.equal(failure.gold, 0);
+  assert.equal(failure.region, 'platform');
+});
+
+test('building one bosses retain the intended progression regions', () => {
+  const base = { ...createInitialSave(), building1Unlocked: true, deanLetterReceived: true, atticUnlocked: true, unlockedRegions: ['platform', 'security', 'building1_floor1'] };
+  const pang = applyAction(base, { type: 'boss_clear', bossId: 'pang' });
+  assert.equal(pang.save.region, 'building1_floor3');
+  assert.equal(pang.result.nextRegion, 'building1_floor3');
+  const youkai = applyAction(base, { type: 'boss_clear', bossId: 'youkai', keyRoll: .5 });
+  assert.equal(youkai.save.region, 'platform');
+  assert.equal(youkai.result.stayInRegion, true);
+  assert.equal(youkai.result.vortex, true);
+});
+
 test('progress merge cannot forge gold, pearls, gear, or boss clears', () => {
   const current = { ...createInitialSave(), gold: 10, pearls: 1, bossClears: 2 };
   const merged = mergeProgressSave(current, {

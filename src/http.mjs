@@ -119,7 +119,7 @@ export function createHttpServer({ store, staticDir, random = Math.random }) {
 
       if (url.pathname === '/api/action' && req.method === 'POST') {
         const session = requireSession(req); const action = await bodyJson(req);
-        if (['boss_clear', 'enemy_defeat'].includes(action.type)) throw Object.assign(new Error('该操作必须由战斗结算接口发起'), { status: 400 });
+        if (['boss_clear', 'enemy_defeat', 'dean_failure'].includes(action.type)) throw Object.assign(new Error('该操作必须由战斗结算接口发起'), { status: 400 });
         const applied = applyAction(store.getSave(session.accountId), action);
         const save = store.putSave(session.accountId, applied.save);
         return json(res, 200, { save, result: applied.result });
@@ -127,7 +127,7 @@ export function createHttpServer({ store, staticDir, random = Math.random }) {
 
       if (url.pathname === '/api/enemy-defeat' && req.method === 'POST') {
         const session = requireSession(req); const { enemyType } = await bodyJson(req);
-        const rewards = { hall_patrol: [4, 8], corridor_archer: [6, 11], security_echo: [5, 9] };
+        const rewards = { hall_patrol: [4, 8], corridor_archer: [6, 11], security_echo: [5, 9], building1_guard: [5, 10], building1_archer: [7, 13], building1_wraith: [8, 14] };
         if (!rewards[enemyType]) throw Object.assign(new Error('未知敌人'), { status: 400 });
         const [min, max] = rewards[enemyType]; const amount = min + Math.floor(random() * (max - min + 1));
         const applied = applyAction(store.getSave(session.accountId), { type: 'enemy_defeat', amount });
@@ -136,9 +136,17 @@ export function createHttpServer({ store, staticDir, random = Math.random }) {
       }
 
       if (url.pathname === '/api/boss-clear' && req.method === 'POST') {
-        const session = requireSession(req); const current = store.getSave(session.accountId);
-        if (current.quest !== 'building2_active') throw Object.assign(new Error('2 号楼副本尚未开启'), { status: 400 });
-        const applied = applyAction(current, { type: 'boss_clear', armorRoll: random(), pearlRoll: random() });
+        const session = requireSession(req); const current = store.getSave(session.accountId); const { bossId = 'zigou' } = await bodyJson(req);
+        const action = { type: 'boss_clear', bossId };
+        if (bossId === 'zigou') { action.armorRoll = random(); action.pearlRoll = random(); }
+        if (bossId === 'youkai') action.keyRoll = random();
+        const applied = applyAction(current, action);
+        const save = store.putSave(session.accountId, applied.save);
+        return json(res, 200, { save, result: applied.result });
+      }
+
+      if (url.pathname === '/api/dean-failure' && req.method === 'POST') {
+        const session = requireSession(req); const applied = applyAction(store.getSave(session.accountId), { type: 'dean_failure' });
         const save = store.putSave(session.accountId, applied.save);
         return json(res, 200, { save, result: applied.result });
       }

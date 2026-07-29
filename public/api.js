@@ -24,5 +24,6 @@ export const api = {
   save: (save) => request('/api/save', { method: 'PUT', body: JSON.stringify(save) }),
   action: (action) => request('/api/action', { method: 'POST', body: JSON.stringify(action) }),
   enemyDefeat: (enemyType) => request('/api/enemy-defeat', { method: 'POST', body: JSON.stringify({ enemyType }) }),
-  bossClear: () => request('/api/boss-clear', { method: 'POST', body: '{}' })
+  bossClear: (bossId = 'zigou') => request('/api/boss-clear', { method: 'POST', body: JSON.stringify({ bossId }) }),
+  deanFailure: () => request('/api/dean-failure', { method: 'POST', body: '{}' })
 };

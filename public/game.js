@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { UI } from './ui.js';
 import { ITEMS, SECURITY_SURVIVAL_SECONDS, actualDamage, armorReduction, clamp, distance, lifeStealAmount, reflectBullet, segmentCircleHit, weaponAttack } from './rules.js';
-import { REGIONS, createRegionEnemies, drawRegion, getInteractions } from './world.js';
+import { REGIONS, createRegionEnemies, createRegionHazards, drawRegion, getInteractions, getRegionWalls, isBuildingOneRegion } from './world.js';
 
 const q = (selector) => document.querySelector(selector);
 const canvas = q('#game-canvas');
@@ -96,6 +96,7 @@ class GreatWarGame {
     this.particles = [];
     this.floaters = [];
     this.hazards = [];
+    this.walls = [];
     this.interactions = [];
     this.nearestInteraction = null;
     this.challenge = null;
@@ -108,6 +109,7 @@ class GreatWarGame {
     this.saveTimer = 0;
     this.unsaved = false;
     this.roomClearNotified = false;
+    this.pendingBossResult = null;
     this.resize = this.resize.bind(this);
     this.loop = this.loop.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
@@ -147,8 +149,8 @@ class GreatWarGame {
     const spawn = this.region.spawn; this.player.x = spawn.x; this.player.y = spawn.y; this.player.vx = 0; this.player.vy = 0;
     this.player.moving = false; this.player.dashMotion = null; this.player.attackChain = 0; this.player.attackChainTimer = 0;
     this.player.animation = { action: null, elapsed: 0, duration: 0, locked: false };
-    this.enemies = createRegionEnemies(this.region.id); this.bullets = []; this.hazards = []; this.particles = []; this.roomClearNotified = false;
-    this.interactions = getInteractions(this.region.id); this.nearestInteraction = null;
+    this.enemies = createRegionEnemies(this.region.id); this.bullets = []; this.hazards = createRegionHazards(this.region.id); this.walls = getRegionWalls(this.region.id); this.particles = []; this.roomClearNotified = false;
+    this.interactions = getInteractions(this.region.id, this.save); this.nearestInteraction = null;
     this.challenge = this.region.id === 'security' && this.save.quest === 'security_active' ? { active: true, time: 0, shotCd: .8, resets: 0 } : null;
     this.camera.x = clamp(this.player.x - this.viewWidth / 2, 0, Math.max(0, this.region.width - this.viewWidth));
     this.camera.y = clamp(this.player.y - this.viewHeight / 2, 0, Math.max(0, this.region.height - this.viewHeight));
@@ -189,9 +191,11 @@ class GreatWarGame {
     if (target.type === 'forge') return UI.renderForge(this.save);
     if (target.type === 'teleporter') return this.openTeleporter();
     if (target.type === 'locked') return UI.toast(`${target.number} 号楼仍被帝都封印`, 'red');
+    if (target.type === 'altar') return this.activateAttic();
     if (target.type === 'portal') {
       if (target.id === 'security_gate' && this.save.quest === 'intro') return UI.toast('先与王子毅领取“神的开始”', 'red');
       if (target.id === 'building2_gate' && this.save.quest !== 'building2_active') return UI.toast('获得帝王剑后，王子毅才会开放 2 号楼', 'red');
+      if (target.id === 'building1_gate' && !this.save.building1Unlocked) return UI.toast('先击败子狗，寻找院长遗留的来信', 'red');
       if (target.requiresClear && this.enemies.some(enemy => !enemy.dead)) return UI.toast('封锁尚未解除：清理当前区域', 'red');
       return this.transition(target.target);
     }
@@ -220,7 +224,15 @@ class GreatWarGame {
 
   openTeleporter() {
     const buildingReady = this.save.quest === 'building2_active';
-    UI.openModal('ZHONGTIAN TRANSFER ARRAY', '台子 · 区域传送', `<div class="forge-actions"><article><small>西南禁区</small><h3>保安处</h3><p>反弹弹幕训练场。</p><button data-action="teleport" data-item="security">传送</button></article><article><small>当前开放副本</small><h3>2 号楼</h3><p>失序大厅、回声走廊、犬神办公室。</p><button data-action="teleport" data-item="building2_floor1" ${buildingReady ? '' : 'disabled'}>${buildingReady ? '传送' : '尚未解锁'}</button></article></div>`);
+    const buildingOne = Boolean(this.save.building1Unlocked);
+    UI.openModal('ZHONGTIAN TRANSFER ARRAY', '台子 · 区域传送', `<div class="forge-actions"><article><small>西南禁区</small><h3>保安处</h3><p>反弹弹幕训练场。</p><button data-action="teleport" data-item="security">传送</button></article><article><small>当前开放副本</small><h3>2 号楼</h3><p>失序大厅、回声走廊、犬神办公室。</p><button data-action="teleport" data-item="building2_floor1" ${buildingReady ? '' : 'disabled'}>${buildingReady ? '传送' : '尚未解锁'}</button></article><article><small>院长遗案</small><h3>1 号楼</h3><p>五层推进，阁楼封印与黑化院长。</p><button data-action="teleport" data-item="building1_floor1" ${buildingOne ? '' : 'disabled'}>${buildingOne ? '传送' : '等待子狗首杀'}</button></article></div>`);
+  }
+
+  async activateAttic() {
+    try {
+      const payload = await api.action({ type: 'activate_attic' }); this.save = payload.save;
+      this.interactions = getInteractions(this.region.id, this.save); UI.toast(payload.result.message, 'gold', 3.5); this.burst(780, 480, '#f3cf74', 45, 250, 1);
+    } catch (error) { UI.toast(error.message, 'red'); }
   }
 
   basicAttack() {
@@ -274,13 +286,13 @@ class GreatWarGame {
   }
 
   killEnemy(enemy) {
-    if(enemy.dead)return;enemy.dead=true;this.burst(enemy.x,enemy.y,enemy.boss?'#d84d4c':'#98d7c5',enemy.boss?55:22,enemy.boss?300:190,.9);this.addFloater(enemy.x,enemy.y-enemy.r-18,enemy.boss?'子狗伏诛':'击破',enemy.boss?'#ff8b79':'#bdebdc',enemy.boss?22:14);
-    if(enemy.boss)this.completeBoss();else api.enemyDefeat(enemy.goldType).then(({save,result})=>{this.save=save;UI.toast(result.message,'cyan',1.2);}).catch(()=>{this.unsaved=true;UI.saveStatus('offline');});
+    if(enemy.dead)return;enemy.dead=true;this.burst(enemy.x,enemy.y,enemy.boss?'#d84d4c':'#98d7c5',enemy.boss?55:22,enemy.boss?300:190,.9);this.addFloater(enemy.x,enemy.y-enemy.r-18,enemy.boss?`${enemy.name}伏诛`:'击破',enemy.boss?'#ff8b79':'#bdebdc',enemy.boss?22:14);
+    if(enemy.boss)this.completeBoss(enemy.bossId || 'zigou');else api.enemyDefeat(enemy.goldType).then(({save,result})=>{this.save=save;UI.toast(result.message,'cyan',1.2);}).catch(()=>{this.unsaved=true;UI.saveStatus('offline');});
   }
 
-  async completeBoss() {
+  async completeBoss(bossId) {
     try {
-      const payload=await api.bossClear();this.save=payload.save;this.save.health=this.player.hp;UI.showBossLoot(payload.result);UI.saveStatus('saved');
+      const payload=await api.bossClear(bossId);this.save=payload.save;this.save.health=this.player.hp;this.pendingBossResult=payload.result;UI.showBossLoot(payload.result);UI.saveStatus('saved');
     }catch(error){UI.toast(error.message,'red');}
   }
 
@@ -291,8 +303,23 @@ class GreatWarGame {
     if(p.hp<=0){this.dead=true;p.animation={action:'dead',elapsed:0,duration:Infinity,locked:true};keys.clear();UI.showDefeat(true);}else{this.startPlayerAnimation('hurt',.2,false);this.save.health=p.hp;this.autosave();}
   }
 
-  respawn() {
-    this.dead=false;this.player.hp=this.player.maxHp;this.player.musou=0;this.player.aura=0;this.player.dragonBlood=0;UI.showDefeat(false);this.loadRegion(this.save.region,false);this.save.health=this.player.maxHp;this.autosave();UI.toast('帝气未绝 · 返回检查点','cyan');
+  async respawn() {
+    const atticDeath = this.region.id === 'building1_attic';
+    this.dead=false;this.player.hp=this.player.maxHp;this.player.musou=0;this.player.aura=0;this.player.dragonBlood=0;UI.showDefeat(false);
+    if (atticDeath) {
+      try { const payload = await api.deanFailure(); this.save = payload.save; UI.toast(payload.result.message, 'red', 3.5); }
+      catch (error) { UI.toast(error.message, 'red'); }
+    } else {
+      this.save.region = 'platform'; this.save.checkpoint = 'platform_start'; this.save.health = this.player.maxHp;
+    }
+    await this.transition('platform'); this.autosave(true); UI.toast('帝气未绝 · 返回中天台子', 'cyan');
+  }
+
+  async closeBossLoot() {
+    const result = this.pendingBossResult; this.pendingBossResult = null; UI.closeModal();
+    if (result?.nextRegion) return this.transition(result.nextRegion);
+    if (result?.stayInRegion) { this.interactions = getInteractions(this.region.id, this.save); UI.toast(result.vortex ? '阁楼漩涡已出现' : '天台出口已开启，前往 4 楼祭坛使用钥匙', 'cyan', 3); return; }
+    return this.transition('platform');
   }
 
   startPlayerAnimation(action, duration, locked = true) {
@@ -307,8 +334,7 @@ class GreatWarGame {
       p.dashMotion.elapsed += dt;
       const t = Math.min(1, p.dashMotion.elapsed / p.dashMotion.duration);
       const eased = t * t * (3 - 2 * t);
-      p.x = p.dashMotion.start.x + (p.dashMotion.end.x - p.dashMotion.start.x) * eased;
-      p.y = p.dashMotion.start.y + (p.dashMotion.end.y - p.dashMotion.start.y) * eased;
+      this.moveEntity(p, p.dashMotion.start.x + (p.dashMotion.end.x - p.dashMotion.start.x) * eased - p.x, p.dashMotion.start.y + (p.dashMotion.end.y - p.dashMotion.start.y) * eased - p.y);
       if (t === 1) p.dashMotion = null;
     }
     if (!p.animation.action) return;
@@ -330,8 +356,21 @@ class GreatWarGame {
 
   updateMovement(dt) {
     const p=this.player;if(p.animation.locked){p.moving=false;return;}let dx=0,dy=0;if(keys.has('w')||keys.has('arrowup'))dy-=1;if(keys.has('s')||keys.has('arrowdown'))dy+=1;if(keys.has('a')||keys.has('arrowleft'))dx-=1;if(keys.has('d')||keys.has('arrowright'))dx+=1;
-    p.moving=Boolean(dx||dy);if(p.moving){const len=Math.hypot(dx,dy);dx/=len;dy/=len;p.x+=dx*p.speed*dt;p.y+=dy*p.speed*dt;p.facing=Math.atan2(dy,dx);p.step+=dt*13;}
-    p.x=clamp(p.x,38,this.region.width-38);p.y=clamp(p.y,38,this.region.height-38);
+    p.moving=Boolean(dx||dy);if(p.moving){const len=Math.hypot(dx,dy);dx/=len;dy/=len;this.moveEntity(p,dx*p.speed*dt,dy*p.speed*dt);p.facing=Math.atan2(dy,dx);p.step+=dt*13;}
+  }
+
+  moveEntity(entity, dx, dy) {
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 8));
+    for (let step = 0; step < steps; step += 1) {
+      entity.x = clamp(entity.x + dx / steps, entity.r + 18, this.region.width - entity.r - 18);
+      entity.y = clamp(entity.y + dy / steps, entity.r + 18, this.region.height - entity.r - 18);
+      for (const wall of this.walls) {
+        const nearestX = clamp(entity.x, wall.x, wall.x + wall.w), nearestY = clamp(entity.y, wall.y, wall.y + wall.h);
+        const vx = entity.x - nearestX, vy = entity.y - nearestY, d = Math.hypot(vx, vy);
+        if (d < entity.r && d > .001) { const push = entity.r - d; entity.x += vx / d * push; entity.y += vy / d * push; }
+        else if (d <= .001 && entity.x > wall.x && entity.x < wall.x + wall.w && entity.y > wall.y && entity.y < wall.y + wall.h) entity.x -= dx / steps || 1;
+      }
+    }
   }
 
   updateChallenge(dt) {
@@ -355,14 +394,23 @@ class GreatWarGame {
     if(enemy.airborne>0)return;const p=this.player;const dx=p.x-enemy.x,dy=p.y-enemy.y,d=Math.hypot(dx,dy)||1,ux=dx/d,uy=dy/d;
     if(enemy.boss){
       const phase2=enemy.hp<=enemy.maxHp/2;
-      if(phase2&&enemy.phaseTimer<=0){enemy.phaseTimer=2.8;this.hazards.push({x:p.x,y:p.y,r:145,time:1.15,max:1.15,damage:30,triggered:false});UI.toast('子狗正在召唤冲刺幻影','red',1.2);}
-      if(d>enemy.r+p.r+25){const boost=phase2?1.42:1;enemy.vx+=ux*enemy.speed*boost*dt*4;enemy.vy+=uy*enemy.speed*boost*dt*4;}
-      else if(enemy.attackCd<=0){enemy.attackCd=phase2?.72:1.05;this.damagePlayer(enemy.damage+(phase2?6:0));enemy.vx-=ux*170;enemy.vy-=uy*170;}
+      if(enemy.bossId==='zigou'){
+        if(phase2&&enemy.phaseTimer<=0){enemy.phaseTimer=2.8;this.hazards.push({x:p.x,y:p.y,r:145,time:1.15,max:1.15,damage:30,triggered:false});UI.toast('子狗正在召唤冲刺幻影','red',1.2);}
+        if(d>enemy.r+p.r+25){const boost=phase2?1.42:1;enemy.vx+=ux*enemy.speed*boost*dt*4;enemy.vy+=uy*enemy.speed*boost*dt*4;}else if(enemy.attackCd<=0){enemy.attackCd=phase2?.72:1.05;this.damagePlayer(enemy.damage+(phase2?6:0));enemy.vx-=ux*170;enemy.vy-=uy*170;}
+      }else if(enemy.bossId==='pang'){
+        if(d>enemy.r+p.r+18){enemy.vx+=ux*enemy.speed*dt*3;}else if(enemy.attackCd<=0){enemy.attackCd=1.35;this.damagePlayer(enemy.damage);}
+      }else if(enemy.bossId==='youkai'){
+        if(enemy.phaseTimer<=0){enemy.phaseTimer=phase2?1.05:1.55;enemy.vx+=ux*(phase2?700:520);enemy.vy+=uy*(phase2?700:520);this.burst(enemy.x,enemy.y,'#eb6e63',16,210,.45);}
+        if(d>enemy.r+p.r+20){enemy.vx+=ux*enemy.speed*(phase2?1.45:1)*dt*5;enemy.vy+=uy*enemy.speed*(phase2?1.45:1)*dt*5;}else if(enemy.attackCd<=0){enemy.attackCd=.58;this.damagePlayer(enemy.damage+(phase2?8:0));}
+      }else{
+        if(enemy.phaseTimer<=0){enemy.phaseTimer=2.1;this.hazards.push({x:p.x,y:p.y,r:118,time:.8,max:.8,damage:38,triggered:false});UI.toast('院长召来禁书烈焰','red',1.1);}
+        if(d>enemy.r+p.r+18){enemy.vx+=ux*enemy.speed*(phase2?1.3:1)*dt*4;enemy.vy+=uy*enemy.speed*(phase2?1.3:1)*dt*4;}else if(enemy.attackCd<=0){enemy.attackCd=.68;this.damagePlayer(enemy.damage+(phase2?10:0));}
+      }
     }else if(enemy.ranged){
       if(d>360){enemy.vx+=ux*enemy.speed*dt*3;enemy.vy+=uy*enemy.speed*dt*3;}else if(d<230){enemy.vx-=ux*enemy.speed*dt*2.5;enemy.vy-=uy*enemy.speed*dt*2.5;}
       if(enemy.attackCd<=0&&d<520){enemy.attackCd=1.7;this.bullets.push({x:enemy.x,y:enemy.y,r:6,vx:ux*260,vy:uy*260,bounces:0,life:5,kind:'enemy',damage:enemy.damage,color:'#a96ddd'});}
     }else{if(d>enemy.r+p.r+10){enemy.vx+=ux*enemy.speed*dt*4;enemy.vy+=uy*enemy.speed*dt*4;}else if(enemy.attackCd<=0){enemy.attackCd=1.08;this.damagePlayer(enemy.damage);enemy.vx-=ux*120;enemy.vy-=uy*120;}}
-    enemy.vx*=Math.pow(.005,dt);enemy.vy*=Math.pow(.005,dt);enemy.x=clamp(enemy.x+enemy.vx*dt,70,this.region.width-70);enemy.y=clamp(enemy.y+enemy.vy*dt,70,this.region.height-70);
+    enemy.vx*=Math.pow(.005,dt);enemy.vy*=Math.pow(.005,dt);this.moveEntity(enemy,enemy.vx*dt,enemy.vy*dt);
   }
 
   updateBullets(dt) {
@@ -372,8 +420,11 @@ class GreatWarGame {
   }
 
   updateHazards(dt) {
-    for(const h of this.hazards){h.time-=dt;if(h.time<=0&&!h.triggered){h.triggered=true;if(distance(h,this.player)<h.r)this.damagePlayer(h.damage);this.burst(h.x,h.y,'#df5a52',28,250,.7);this.camera.shake=8;}}
-    this.hazards=this.hazards.filter(h=>h.time>-.35);
+    for(const h of this.hazards){
+      if(h.static){h.hitCd=Math.max(0,h.hitCd-dt);h.age=(h.age||0)+dt;h.active=((h.age+h.offset)%h.period)<h.activeFor;if(h.active&&h.hitCd<=0&&distance(h,this.player)<h.r){h.hitCd=.8;this.damagePlayer(h.damage);this.burst(h.x,h.y,h.type==='fire'?'#ff914d':'#df5a52',14,180,.4);}continue;}
+      h.time-=dt;if(h.time<=0&&!h.triggered){h.triggered=true;if(distance(h,this.player)<h.r)this.damagePlayer(h.damage);this.burst(h.x,h.y,'#df5a52',28,250,.7);this.camera.shake=8;}
+    }
+    this.hazards=this.hazards.filter(h=>h.static || h.time>-.35);
   }
 
   updateParticles(dt) {for(const p of this.particles){p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=Math.pow(.06,dt);p.vy*=Math.pow(.06,dt);}this.particles=this.particles.filter(p=>p.life>0);for(const f of this.floaters){f.life-=dt;f.y-=35*dt;}this.floaters=this.floaters.filter(f=>f.life>0);}
@@ -395,6 +446,7 @@ class GreatWarGame {
     if(qst==='intro'){title='风起中天';copy='在台子上寻找王子毅，领取第一道使命。';}
     else if(qst==='security_active'){title='神的开始';copy=this.region.id==='security'?`在反弹弹幕中连续 ${SECURITY_SURVIVAL_SECONDS} 秒不受伤。`:'前往帝都西南的保安处，接受无伤试炼。';}
     else if(qst==='security_complete'){title='神的开始 · 复命';copy='试炼完成，回台子向王子毅领取初始装备。';}
+    else if(this.save.building1Unlocked){title='1 号楼：黑化院长';copy=isBuildingOneRegion(this.region.id)?'清理当前楼层，寻找祭坛、阁楼钥匙与黑化院长。':'子狗遗信已经解开 1 号楼封印，前往帝都东南调查。';}
     else{title='2 号楼：犬神办公室';copy=this.region.id.startsWith('building2')?'清理当前楼层，向顶层的子狗推进。':'从台子南侧进入 2 号楼，击败最终首领子狗。';}
     UI.setQuest(title,copy);
   }
@@ -407,15 +459,17 @@ class GreatWarGame {
 
   render(time) {
     const w=this.viewWidth,h=this.viewHeight;ctx.clearRect(0,0,w,h);const sky=ctx.createLinearGradient(0,0,0,h);sky.addColorStop(0,'#08151d');sky.addColorStop(1,'#0b171a');ctx.fillStyle=sky;ctx.fillRect(0,0,w,h);
-    const sx=this.camera.shake?(Math.random()-.5)*this.camera.shake:0,sy=this.camera.shake?(Math.random()-.5)*this.camera.shake:0;ctx.save();ctx.translate(-this.camera.x+sx,-this.camera.y+sy);drawRegion(ctx,this.region.id,time);
+    const sx=this.camera.shake?(Math.random()-.5)*this.camera.shake:0,sy=this.camera.shake?(Math.random()-.5)*this.camera.shake:0;ctx.save();ctx.translate(-this.camera.x+sx,-this.camera.y+sy);drawRegion(ctx,this.region.id,time,this.save);this.drawWalls(time);
     this.drawInteractions(time);for(const hazard of this.hazards)this.drawHazard(hazard);for(const bullet of this.bullets)this.drawBullet(bullet,time);
     const entities=[...this.enemies.filter(e=>!e.dead),{...this.player,type:'player'}].sort((a,b)=>a.y-b.y);for(const entity of entities)entity.type==='player'?this.drawPlayer(entity,time):this.drawEnemy(entity,time);
     this.drawAttackFx();this.drawParticles();this.drawFloaters();ctx.restore();this.drawAtmosphere(w,h,time);this.drawMiniMap(w,h);
   }
 
   drawInteractions(time) {
-    for(const item of this.interactions.filter(i=>['portal','teleporter'].includes(i.type))){const unlocked=!(item.id==='building2_gate'&&this.save.quest!=='building2_active');ctx.strokeStyle=unlocked?'rgba(105,224,196,.55)':'rgba(211,80,70,.4)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(item.x,item.y,28+Math.sin(time*3+item.x)*4,0,Math.PI*2);ctx.stroke();ctx.fillStyle=unlocked?'rgba(105,224,196,.12)':'rgba(211,80,70,.1)';ctx.beginPath();ctx.arc(item.x,item.y,22,0,Math.PI*2);ctx.fill();}
+    for(const item of this.interactions.filter(i=>['portal','teleporter','altar'].includes(i.type))){const altar=item.type==='altar';const unlocked=!(item.id==='building2_gate'&&this.save.quest!=='building2_active');ctx.strokeStyle=altar?'rgba(241,196,93,.8)':unlocked?'rgba(105,224,196,.55)':'rgba(211,80,70,.4)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(item.x,item.y,28+Math.sin(time*3+item.x)*4,0,Math.PI*2);ctx.stroke();ctx.fillStyle=altar?'rgba(241,196,93,.16)':unlocked?'rgba(105,224,196,.12)':'rgba(211,80,70,.1)';ctx.beginPath();ctx.arc(item.x,item.y,22,0,Math.PI*2);ctx.fill();}
   }
+
+  drawWalls(time) {for(const wall of this.walls){ctx.fillStyle='rgba(4,10,13,.88)';ctx.fillRect(wall.x,wall.y,wall.w,wall.h);ctx.strokeStyle='rgba(156,99,79,.72)';ctx.lineWidth=3;ctx.strokeRect(wall.x,wall.y,wall.w,wall.h);ctx.fillStyle=`rgba(224,90,72,${.08+Math.sin(time*2+wall.x)*.03})`;ctx.fillRect(wall.x+5,wall.y+5,wall.w-10,wall.h-10);}}
 
   drawPlayer(p,time) {
     const bob=Math.sin(p.step)*2;ctx.save();ctx.translate(p.x,p.y);if(p.aura>0){const g=ctx.createRadialGradient(0,0,8,0,0,75);g.addColorStop(0,'rgba(255,217,112,.26)');g.addColorStop(1,'rgba(255,217,112,0)');ctx.fillStyle=g;ctx.fillRect(-80,-80,160,160);ctx.strokeStyle=`rgba(255,226,134,${.45+Math.sin(time*7)*.18})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,38+Math.sin(time*5)*4,0,Math.PI*2);ctx.stroke();}
@@ -427,13 +481,13 @@ class GreatWarGame {
 
   drawEnemy(e,time) {
     ctx.save();ctx.translate(e.x,e.y);const lift=e.airborne>0?Math.sin(Math.min(1,e.airborne)*Math.PI)*38:0;ctx.translate(0,-lift);ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(0,e.r*.7,e.r*1.2,e.r*.38,0,0,Math.PI*2);ctx.fill();
-    if(e.boss){const frenzy=e.hp<=e.maxHp/2;const g=ctx.createRadialGradient(0,0,8,0,0,85);g.addColorStop(0,frenzy?'rgba(227,69,67,.27)':'rgba(179,91,66,.18)');g.addColorStop(1,'rgba(210,60,60,0)');ctx.fillStyle=g;ctx.fillRect(-90,-90,180,180);ctx.fillStyle=e.hitFlash?'#fff1dc':'#72343b';ctx.beginPath();ctx.ellipse(0,0,55,39,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#a55d45';ctx.beginPath();ctx.arc(27,-25,30,0,Math.PI*2);ctx.fill();ctx.fillStyle='#2b191c';ctx.beginPath();ctx.moveTo(7,-46);ctx.lineTo(14,-76);ctx.lineTo(31,-50);ctx.moveTo(36,-51);ctx.lineTo(59,-70);ctx.lineTo(57,-36);ctx.fill();ctx.fillStyle='#ffc55e';ctx.fillRect(34,-29,6,5);ctx.fillStyle='#d8c6aa';ctx.beginPath();ctx.moveTo(53,-10);ctx.lineTo(70,-2);ctx.lineTo(54,5);ctx.closePath();ctx.fill();ctx.font='700 15px serif';ctx.fillStyle='#f1d5c1';ctx.textAlign='center';ctx.fillText('子狗',0,-83);
+    if(e.boss){const frenzy=e.hp<=e.maxHp/2;const palette={pang:'#506b80',youkai:'#a43a3b',dean:'#69417d',zigou:'#72343b'};const g=ctx.createRadialGradient(0,0,8,0,0,85);g.addColorStop(0,frenzy?'rgba(227,69,67,.27)':'rgba(179,91,66,.18)');g.addColorStop(1,'rgba(210,60,60,0)');ctx.fillStyle=g;ctx.fillRect(-90,-90,180,180);ctx.fillStyle=e.hitFlash?'#fff1dc':(palette[e.bossId]||palette.zigou);ctx.beginPath();ctx.ellipse(0,0,e.r,e.r*.72,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=e.bossId==='pang'?'#9bb2bd':'#a55d45';ctx.beginPath();ctx.arc(27,-25,Math.min(30,e.r*.62),0,Math.PI*2);ctx.fill();ctx.fillStyle='#2b191c';ctx.beginPath();ctx.moveTo(7,-46);ctx.lineTo(14,-76);ctx.lineTo(31,-50);ctx.moveTo(36,-51);ctx.lineTo(59,-70);ctx.lineTo(57,-36);ctx.fill();ctx.fillStyle='#ffc55e';ctx.fillRect(34,-29,6,5);ctx.font='700 15px serif';ctx.fillStyle='#f1d5c1';ctx.textAlign='center';ctx.fillText(e.name,0,-83);
     }else{const ranged=e.ranged;ctx.fillStyle=e.hitFlash?'#f5fff9':ranged?'#57427a':'#375b5b';ctx.beginPath();ctx.moveTo(-e.r,e.r);ctx.lineTo(-e.r*.65,-e.r);ctx.lineTo(e.r*.65,-e.r);ctx.lineTo(e.r,e.r);ctx.closePath();ctx.fill();ctx.strokeStyle=ranged?'#a884d1':'#6fc8b5';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#252c2e';ctx.beginPath();ctx.arc(0,-e.r-6,e.r*.65,0,Math.PI*2);ctx.fill();ctx.fillStyle=ranged?'#cf9dfa':'#83dec7';ctx.fillRect(-7,-e.r-8,4,3);ctx.fillRect(4,-e.r-8,4,3);ctx.font='10px sans-serif';ctx.fillStyle='#c9d3cf';ctx.textAlign='center';ctx.fillText(e.name,0,-e.r-28);}
     const width=e.boss?100:48;ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(-width/2,-e.r-(e.boss?60:39),width,6);ctx.fillStyle=e.boss?'#d84f4d':'#6bc6b1';ctx.fillRect(-width/2+1,-e.r-(e.boss?59:38),(width-2)*Math.max(0,e.hp/e.maxHp),4);ctx.restore();
   }
 
   drawBullet(b,time) {const g=ctx.createRadialGradient(b.x,b.y,1,b.x,b.y,b.r*4);g.addColorStop(0,b.color);g.addColorStop(1,'transparent');ctx.fillStyle=g;ctx.fillRect(b.x-b.r*4,b.y-b.r*4,b.r*8,b.r*8);ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(b.x,b.y,b.r+Math.sin(time*10+b.x)*1.2,0,Math.PI*2);ctx.fill();if(b.kind==='security'){ctx.strokeStyle='rgba(255,185,147,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(b.x,b.y,b.r+5,0,Math.PI*2);ctx.stroke();}}
-  drawHazard(h){const progress=Math.max(0,h.time/h.max);ctx.fillStyle=`rgba(220,67,66,${h.triggered?.24:.07})`;ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(255,102,83,${.4+progress*.5})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(h.x,h.y,h.r*(1-progress*.55),0,Math.PI*2);ctx.stroke();}
+  drawHazard(h){if(h.static){const active=Boolean(h.active);ctx.fillStyle=h.type==='fire'?(active?'rgba(255,104,43,.42)':'rgba(152,66,42,.14)'):(active?'rgba(220,67,66,.42)':'rgba(122,57,60,.14)');ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=active?'rgba(255,209,111,.9)':'rgba(214,90,80,.35)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(h.x,h.y,h.r*(active?.78:.92),0,Math.PI*2);ctx.stroke();return;}const progress=Math.max(0,h.time/h.max);ctx.fillStyle=`rgba(220,67,66,${h.triggered?.24:.07})`;ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(255,102,83,${.4+progress*.5})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(h.x,h.y,h.r*(1-progress*.55),0,Math.PI*2);ctx.stroke();}
   drawAttackFx(){
     const fx=this.attackFx;if(!fx)return;const progress=1-fx.time/fx.max;ctx.save();ctx.globalCompositeOperation='lighter';
     if(fx.type==='arc'){
@@ -468,7 +522,7 @@ q('#respawn-button').addEventListener('click',()=>game?.respawn());
 document.addEventListener('click',event=>{const action=event.target.closest('[data-action]')?.dataset.action;if(action==='back-title')UI.showScreen('title-screen');if(action==='logout')logout();});
 document.addEventListener('gw2-modal-action',async event=>{
   if(!game)return;const {action,itemId}=event.detail;if(!action)return;
-  if(action==='close-loot'){UI.closeModal();game.transition('platform');return;}
+  if(action==='close-loot'){game.closeBossLoot();return;}
   if(action==='teleport'){UI.closeModal();game.transition(itemId);return;}
   try{
     let payload;if(action==='buy')payload=await api.action({type:'buy_item',itemId});else if(action==='equip')payload=await api.action({type:'equip_item',itemId});else if(action==='forge')payload=await api.action({type:'forge_sword'});else if(action==='exchange')payload=await api.action({type:'exchange_armor'});else return;

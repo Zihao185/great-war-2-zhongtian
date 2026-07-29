@@ -17,9 +17,9 @@ const SWORD_FORGE_COSTS = Object.freeze([
   { gold: 0, pearls: 5 }
 ]);
 
-const REGIONS = new Set(['platform', 'security', 'building2_floor1', 'building2_floor2', 'building2_boss']);
+const REGIONS = new Set(['platform', 'security', 'building2_floor1', 'building2_floor2', 'building2_boss', 'building1_floor1', 'building1_floor2', 'building1_floor3', 'building1_floor4', 'building1_floor5', 'building1_attic']);
 const QUESTS = ['intro', 'security_active', 'security_complete', 'sword_awarded', 'building2_active'];
-const CHECKPOINTS = new Set(['platform_start', 'security_entry', 'floor1_entry', 'floor2_entry', 'boss_entry']);
+const CHECKPOINTS = new Set(['platform_start', 'security_entry', 'floor1_entry', 'floor2_entry', 'boss_entry', 'building1_floor1_entry', 'building1_floor2_entry', 'building1_floor3_entry', 'building1_floor4_entry', 'building1_floor5_entry', 'building1_attic_entry']);
 
 export class RuleError extends Error {
   constructor(message, code = 'RULE_ERROR') {
@@ -44,6 +44,13 @@ export function createInitialSave() {
     inventory: [],
     equipped: { weapon: null, armor: null },
     bossClears: 0,
+    building1Unlocked: false,
+    deanLetterReceived: false,
+    atticKeys: 0,
+    atticUnlocked: false,
+    building1PangClears: 0,
+    building1YoukaiClears: 0,
+    deanDefeats: 0,
     unlockedRegions: ['platform', 'security'],
     updatedAt: new Date(0).toISOString()
   };
@@ -93,6 +100,14 @@ export function sanitizeSave(raw) {
   clean.pearls = Math.max(0, Math.floor(Number(clean.pearls) || 0));
   clean.swordRank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(clean.swordRank) || 0)));
   clean.bossClears = Math.max(0, Math.floor(Number(clean.bossClears) || 0));
+  clean.building1Unlocked = Boolean(clean.building1Unlocked);
+  clean.deanLetterReceived = Boolean(clean.deanLetterReceived);
+  clean.atticKeys = Math.max(0, Math.floor(Number(clean.atticKeys) || 0));
+  clean.atticUnlocked = Boolean(clean.atticUnlocked);
+  clean.building1PangClears = Math.max(0, Math.floor(Number(clean.building1PangClears) || 0));
+  clean.building1YoukaiClears = Math.max(0, Math.floor(Number(clean.building1YoukaiClears) || 0));
+  clean.deanDefeats = Math.max(0, Math.floor(Number(clean.deanDefeats) || 0));
+  if (clean.building1Unlocked && !clean.unlockedRegions.includes('building1_floor1')) clean.unlockedRegions.push('building1_floor1');
   if (!clean.inventory.includes(clean.equipped.weapon)) clean.equipped.weapon = null;
   if (!clean.inventory.includes(clean.equipped.armor)) clean.equipped.armor = null;
   if (clean.equipped.weapon !== 'imperial_sword') {
@@ -167,15 +182,63 @@ export function applyAction(saveRaw, action = {}) {
     const amount = Math.min(15, Math.max(3, Math.floor(Number(action.amount) || 0)));
     next.gold += amount;
     result = { message: `金币 +${amount}`, gold: amount };
-  } else if (action.type === 'boss_clear') {
-    const loot = rollBossLoot(Number(action.armorRoll), Number(action.pearlRoll));
-    next.gold += 80;
-    next.pearls += loot.pearls;
-    next.bossClears += 1;
-    if (loot.armor && !next.inventory.includes('heavenly_hound_armor')) next.inventory.push('heavenly_hound_armor');
+  } else if (action.type === 'activate_attic') {
+    if (!next.building1Unlocked) throw new RuleError('1 号楼尚未解锁');
+    if (next.atticUnlocked) throw new RuleError('阁楼封印已解除');
+    if (next.atticKeys < 1) throw new RuleError('没有阁楼钥匙');
+    next.atticKeys -= 1;
+    next.atticUnlocked = true;
+    result = { message: '祭坛苏醒 · 阁楼封印已永久解除', atticUnlocked: true };
+  } else if (action.type === 'dean_failure') {
+    if (!next.building1Unlocked) throw new RuleError('1 号楼尚未解锁');
+    const lostGold = Math.min(200, next.gold);
+    next.gold -= lostGold;
     next.region = 'platform';
     next.checkpoint = 'platform_start';
-    result = { message: '子狗已败', gold: 80, armor: loot.armor, pearls: loot.pearls };
+    next.health = next.maxHealth;
+    result = { message: `黑化院长击溃了你 · 金币 -${lostGold}`, lostGold };
+  } else if (action.type === 'boss_clear') {
+    const bossId = action.bossId || 'zigou';
+    if (bossId === 'zigou') {
+      if (next.quest !== 'building2_active') throw new RuleError('2 号楼副本尚未开启');
+      const loot = rollBossLoot(Number(action.armorRoll), Number(action.pearlRoll));
+      const letter = !next.deanLetterReceived;
+      next.gold += 80;
+      next.pearls += loot.pearls;
+      next.bossClears += 1;
+      next.region = 'platform';
+      next.checkpoint = 'platform_start';
+      if (loot.armor && !next.inventory.includes('heavenly_hound_armor')) next.inventory.push('heavenly_hound_armor');
+      if (letter) {
+        next.deanLetterReceived = true;
+        next.building1Unlocked = true;
+        if (!next.unlockedRegions.includes('building1_floor1')) next.unlockedRegions.push('building1_floor1');
+      }
+      result = { message: '子狗已败', bossId, gold: 80, armor: loot.armor, pearls: loot.pearls, letter };
+    } else if (bossId === 'pang') {
+      if (!next.building1Unlocked) throw new RuleError('1 号楼尚未解锁');
+      next.gold += 80;
+      next.building1PangClears += 1;
+      next.region = 'building1_floor3';
+      next.checkpoint = 'building1_floor3_entry';
+      result = { message: '小胖倒下了', bossId, gold: 80, nextRegion: 'building1_floor3' };
+    } else if (bossId === 'youkai') {
+      if (!next.building1Unlocked) throw new RuleError('1 号楼尚未解锁');
+      const key = Number(action.keyRoll) < 0.5;
+      next.gold += 80;
+      next.building1YoukaiClears += 1;
+      if (key) next.atticKeys += 1;
+      result = { message: '魔王尤恺伏诛', bossId, gold: 80, key, stayInRegion: true, vortex: next.atticUnlocked };
+    } else if (bossId === 'dean') {
+      if (!next.building1Unlocked || !next.atticUnlocked) throw new RuleError('阁楼封印尚未解除');
+      next.gold += 500;
+      next.deanDefeats += 1;
+      next.region = 'platform';
+      next.checkpoint = 'platform_start';
+      result = { message: '黑化院长恢复了清明', bossId, gold: 500 };
+    } else {
+      throw new RuleError('未知首领');
+    }
   } else {
     throw new RuleError('未知操作');
   }
