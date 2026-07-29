@@ -12,3 +12,8 @@ test('rising dragon input is buffered during dash and executes when movement end
   assert.match(source, /p\.dashMotion && p\.riseCd <= 0\) \{ p\.queuedRise = true; return; \}/);
   assert.match(source, /if \(p\.queuedRise\) \{ p\.queuedRise = false; this\.performRisingDragon\(true\); \}/);
 });
+
+test('Pang has a dedicated Liangzi portrait asset', () => {
+  assert.match(source, /pangPortrait\.src = '\/assets\/characters\/liangzi-pang-v1\.jpg'/);
+  assert.match(source, /e\.bossId==='pang'&&pangPortrait\.complete&&pangPortrait\.naturalWidth/);
+});

@@ -8,6 +8,8 @@ const canvas = q('#game-canvas');
 const ctx = canvas.getContext('2d');
 const emperorSwordSprite = new Image();
 emperorSwordSprite.src = '/assets/characters/yang-zihao-emperor-sword-v1.png';
+const pangPortrait = new Image();
+pangPortrait.src = '/assets/characters/liangzi-pang-v1.jpg';
 const keys = new Set();
 let authMode = 'login';
 let entryIntent = 'new';
@@ -73,7 +75,7 @@ function waitForImage(image) {
 }
 
 async function preloadGameAssets() {
-  await waitForImage(emperorSwordSprite);
+  await Promise.all([waitForImage(emperorSwordSprite), waitForImage(pangPortrait)]);
 }
 
 async function startGame(save) {
@@ -491,7 +493,7 @@ class GreatWarGame {
 
   drawEnemy(e,time) {
     ctx.save();ctx.translate(e.x,e.y);const lift=e.airborne>0?Math.sin(Math.min(1,e.airborne)*Math.PI)*38:0;ctx.translate(0,-lift);ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(0,e.r*.7,e.r*1.2,e.r*.38,0,0,Math.PI*2);ctx.fill();
-    if(e.boss){const frenzy=e.hp<=e.maxHp/2;const palette={pang:'#506b80',youkai:'#a43a3b',dean:'#69417d',zigou:'#72343b'};const g=ctx.createRadialGradient(0,0,8,0,0,85);g.addColorStop(0,frenzy?'rgba(227,69,67,.27)':'rgba(179,91,66,.18)');g.addColorStop(1,'rgba(210,60,60,0)');ctx.fillStyle=g;ctx.fillRect(-90,-90,180,180);ctx.fillStyle=e.hitFlash?'#fff1dc':(palette[e.bossId]||palette.zigou);ctx.beginPath();ctx.ellipse(0,0,e.r,e.r*.72,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=e.bossId==='pang'?'#9bb2bd':'#a55d45';ctx.beginPath();ctx.arc(27,-25,Math.min(30,e.r*.62),0,Math.PI*2);ctx.fill();ctx.fillStyle='#2b191c';ctx.beginPath();ctx.moveTo(7,-46);ctx.lineTo(14,-76);ctx.lineTo(31,-50);ctx.moveTo(36,-51);ctx.lineTo(59,-70);ctx.lineTo(57,-36);ctx.fill();ctx.fillStyle='#ffc55e';ctx.fillRect(34,-29,6,5);ctx.font='700 15px serif';ctx.fillStyle='#f1d5c1';ctx.textAlign='center';ctx.fillText(e.name,0,-83);
+    if(e.boss){const frenzy=e.hp<=e.maxHp/2;const palette={pang:'#506b80',youkai:'#a43a3b',dean:'#69417d',zigou:'#72343b'};const g=ctx.createRadialGradient(0,0,8,0,0,85);g.addColorStop(0,frenzy?'rgba(227,69,67,.27)':'rgba(179,91,66,.18)');g.addColorStop(1,'rgba(210,60,60,0)');ctx.fillStyle=g;ctx.fillRect(-90,-90,180,180);ctx.fillStyle=e.hitFlash?'#fff1dc':(palette[e.bossId]||palette.zigou);ctx.beginPath();ctx.ellipse(0,0,e.r,e.r*.72,0,0,Math.PI*2);ctx.fill();if(e.bossId==='pang'&&pangPortrait.complete&&pangPortrait.naturalWidth){ctx.save();ctx.beginPath();ctx.ellipse(0,-5,e.r*.84,e.r*.68,0,0,Math.PI*2);ctx.clip();ctx.drawImage(pangPortrait,-e.r*.95,-e.r*.78,e.r*1.9,e.r*1.42);ctx.restore();ctx.strokeStyle='#f9d7c9';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(0,-5,e.r*.84,e.r*.68,0,0,Math.PI*2);ctx.stroke();}else{ctx.fillStyle=e.bossId==='pang'?'#9bb2bd':'#a55d45';ctx.beginPath();ctx.arc(27,-25,Math.min(30,e.r*.62),0,Math.PI*2);ctx.fill();ctx.fillStyle='#2b191c';ctx.beginPath();ctx.moveTo(7,-46);ctx.lineTo(14,-76);ctx.lineTo(31,-50);ctx.moveTo(36,-51);ctx.lineTo(59,-70);ctx.lineTo(57,-36);ctx.fill();ctx.fillStyle='#ffc55e';ctx.fillRect(34,-29,6,5);}ctx.font='700 15px serif';ctx.fillStyle='#f1d5c1';ctx.textAlign='center';ctx.fillText(e.name,0,-83);
     }else{const ranged=e.ranged;ctx.fillStyle=e.hitFlash?'#f5fff9':ranged?'#57427a':'#375b5b';ctx.beginPath();ctx.moveTo(-e.r,e.r);ctx.lineTo(-e.r*.65,-e.r);ctx.lineTo(e.r*.65,-e.r);ctx.lineTo(e.r,e.r);ctx.closePath();ctx.fill();ctx.strokeStyle=ranged?'#a884d1':'#6fc8b5';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#252c2e';ctx.beginPath();ctx.arc(0,-e.r-6,e.r*.65,0,Math.PI*2);ctx.fill();ctx.fillStyle=ranged?'#cf9dfa':'#83dec7';ctx.fillRect(-7,-e.r-8,4,3);ctx.fillRect(4,-e.r-8,4,3);ctx.font='10px sans-serif';ctx.fillStyle='#c9d3cf';ctx.textAlign='center';ctx.fillText(e.name,0,-e.r-28);}
     const width=e.boss?100:48;ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(-width/2,-e.r-(e.boss?60:39),width,6);ctx.fillStyle=e.boss?'#d84f4d':'#6bc6b1';ctx.fillRect(-width/2+1,-e.r-(e.boss?59:38),(width-2)*Math.max(0,e.hp/e.maxHp),4);ctx.restore();
   }
