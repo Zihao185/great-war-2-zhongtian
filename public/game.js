@@ -122,7 +122,7 @@ class GreatWarGame {
       x: 0, y: 0, r: 18, maxHp: 160, hp: clamp(this.save.health || 160, 1, 160), speed: 265, facing: 0,
       attackCd: 0, dashCd: 0, riseCd: 0, comboWindow: 0, dragonBlood: 0, musou: 0, aura: 0,
       invuln: 0, hurt: 0, step: 0, moving: false, dashTime: 0, vx: 0, vy: 0,
-      animation: { action: null, elapsed: 0, duration: 0, locked: false }, attackChain: 0, attackChainTimer: 0, dashMotion: null
+      animation: { action: null, elapsed: 0, duration: 0, locked: false }, attackChain: 0, attackChainTimer: 0, dashMotion: null, queuedRise: false
     };
   }
 
@@ -147,7 +147,7 @@ class GreatWarGame {
   loadRegion(regionId, save = true) {
     this.region = REGIONS[regionId] || REGIONS.platform; this.save.region = this.region.id; this.save.checkpoint = this.region.checkpoint;
     const spawn = this.region.spawn; this.player.x = spawn.x; this.player.y = spawn.y; this.player.vx = 0; this.player.vy = 0;
-    this.player.moving = false; this.player.dashMotion = null; this.player.attackChain = 0; this.player.attackChainTimer = 0;
+    this.player.moving = false; this.player.dashMotion = null; this.player.queuedRise = false; this.player.attackChain = 0; this.player.attackChainTimer = 0;
     this.player.animation = { action: null, elapsed: 0, duration: 0, locked: false };
     this.enemies = createRegionEnemies(this.region.id); this.bullets = []; this.hazards = createRegionHazards(this.region.id); this.walls = getRegionWalls(this.region.id); this.particles = []; this.roomClearNotified = false;
     this.interactions = getInteractions(this.region.id, this.save); this.nearestInteraction = null;
@@ -267,8 +267,15 @@ class GreatWarGame {
   }
 
   castRisingDragon() {
+    const p=this.player;
+    if (this.hasSword() && p.dashMotion && p.riseCd <= 0) { p.queuedRise = true; return; }
     if (!this.canAct() || !this.hasSword()) { if (this.canAct()) UI.toast('帝王剑尚未入手', 'red'); return; }
-    const p=this.player;if(p.riseCd>0||p.animation.locked)return;const combo=p.comboWindow>0;const end={x:p.x+Math.cos(p.facing)*115,y:p.y+Math.sin(p.facing)*115};let hit=false;
+    if(p.riseCd>0||p.animation.locked)return;
+    this.performRisingDragon(p.comboWindow > 0);
+  }
+
+  performRisingDragon(combo) {
+    const p=this.player;const end={x:p.x+Math.cos(p.facing)*115,y:p.y+Math.sin(p.facing)*115};let hit=false;
     for(const enemy of this.enemies.filter(enemy=>!enemy.dead))if(segmentCircleHit(p,end,enemy,48)){this.hitEnemy(enemy,Math.round(weaponAttack(this.save)*1.18),p.facing);enemy.airborne=combo?1.05:.42;hit=true;}
     p.riseCd=5;p.comboWindow=0;this.startPlayerAnimation(combo?'rise_combo':'rise',.50,true);if(combo){p.dashCd=0;p.dragonBlood=3;UI.toast('连招成立 · 突进刷新 · 龙血三层','cyan');}else if(hit)UI.toast('升龙命中');
     this.attackFx={type:'rise',time:.58,max:.58,facing:p.facing,color:combo?'#ffe28a':'#75dbc5',combo};this.burst(end.x,end.y,combo?'#ffe38a':'#6bdac5',22,210,.65);this.camera.shake=6;
@@ -335,7 +342,10 @@ class GreatWarGame {
       const t = Math.min(1, p.dashMotion.elapsed / p.dashMotion.duration);
       const eased = t * t * (3 - 2 * t);
       this.moveEntity(p, p.dashMotion.start.x + (p.dashMotion.end.x - p.dashMotion.start.x) * eased - p.x, p.dashMotion.start.y + (p.dashMotion.end.y - p.dashMotion.start.y) * eased - p.y);
-      if (t === 1) p.dashMotion = null;
+      if (t === 1) {
+        p.dashMotion = null;
+        if (p.queuedRise) { p.queuedRise = false; this.performRisingDragon(true); }
+      }
     }
     if (!p.animation.action) return;
     p.animation.elapsed += dt;
@@ -475,7 +485,7 @@ class GreatWarGame {
     const bob=Math.sin(p.step)*2;ctx.save();ctx.translate(p.x,p.y);if(p.aura>0){const g=ctx.createRadialGradient(0,0,8,0,0,75);g.addColorStop(0,'rgba(255,217,112,.26)');g.addColorStop(1,'rgba(255,217,112,0)');ctx.fillStyle=g;ctx.fillRect(-80,-80,160,160);ctx.strokeStyle=`rgba(255,226,134,${.45+Math.sin(time*7)*.18})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,38+Math.sin(time*5)*4,0,Math.PI*2);ctx.stroke();}
     ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(0,20,25,9,0,0,Math.PI*2);ctx.fill();if(p.invuln>0&&Math.floor(p.invuln*18)%2===0)ctx.globalAlpha=.45;
     ctx.fillStyle='#245a67';ctx.beginPath();ctx.moveTo(-18,20);ctx.lineTo(-13,-19+bob);ctx.lineTo(12,-19+bob);ctx.lineTo(20,20);ctx.closePath();ctx.fill();ctx.strokeStyle=p.aura>0?'#ffe18a':'#d4a94f';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#c9916c';ctx.beginPath();ctx.arc(0,-29+bob,13,0,Math.PI*2);ctx.fill();ctx.fillStyle='#20262a';ctx.beginPath();ctx.arc(-1,-35+bob,14,Math.PI,0);ctx.fill();
-    ctx.save();ctx.rotate(p.facing);if(emperorSwordSprite.complete&&emperorSwordSprite.naturalWidth){ctx.drawImage(emperorSwordSprite,9,-10,74,37);}else{ctx.fillStyle='#bb9143';ctx.fillRect(10,-4,27,4);ctx.fillStyle=p.aura>0?'#fff2b0':'#e9e2d1';ctx.beginPath();ctx.moveTo(34,-7);ctx.lineTo(62,-2);ctx.lineTo(34,4);ctx.closePath();ctx.fill();}ctx.restore();
+    if(this.hasSword()){ctx.save();ctx.rotate(p.facing);if(emperorSwordSprite.complete&&emperorSwordSprite.naturalWidth){ctx.drawImage(emperorSwordSprite,9,-10,74,37);}else{ctx.fillStyle='#bb9143';ctx.fillRect(10,-4,27,4);ctx.fillStyle=p.aura>0?'#fff2b0':'#e9e2d1';ctx.beginPath();ctx.moveTo(34,-7);ctx.lineTo(62,-2);ctx.lineTo(34,4);ctx.closePath();ctx.fill();}ctx.restore();}
     ctx.restore();
   }
 
