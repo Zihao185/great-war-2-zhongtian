@@ -13,7 +13,10 @@ test('rising dragon input is buffered during dash and executes when movement end
   assert.match(source, /if \(p\.queuedRise\) \{ p\.queuedRise = false; this\.performRisingDragon\(true\); \}/);
 });
 
-test('Pang has a dedicated Liangzi portrait asset', () => {
-  assert.match(source, /pangPortrait\.src = '\/assets\/characters\/liangzi-pang-v1\.jpg'/);
-  assert.match(source, /e\.bossId==='pang'&&pangPortrait\.complete&&pangPortrait\.naturalWidth/);
+test('Pang renders as a standalone transparent Liangzi sprite', () => {
+  assert.match(source, /pangSprite\.src = '\/assets\/characters\/liangzi-pang-sprite-v1\.png'/);
+  assert.match(source, /const hasPangSprite=e\.bossId==='pang'&&pangSprite\.complete&&pangSprite\.naturalWidth/);
+  assert.match(source, /ctx\.drawImage\(pangSprite,-e\.r\*1\.12,-e\.r\*1\.12,e\.r\*2\.24,e\.r\*2\.24\)/);
+  assert.match(source, /if\(hasPangSprite\)\{/);
+  assert.doesNotMatch(source, /ctx\.clip\(\);ctx\.drawImage\(pangPortrait/);
 });
