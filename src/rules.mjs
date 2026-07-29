@@ -9,6 +9,14 @@ export const ITEM_CATALOG = Object.freeze({
   heavenly_hound_armor: { id: 'heavenly_hound_armor', name: '天犬甲', slot: 'armor', reduction: 0.42, price: null, rarity: 'legendary' }
 });
 
+export const IMPERIAL_SWORD_MAX_RANK = 3;
+export const IMPERIAL_SWORD_ATTACK_BY_RANK = Object.freeze([35, 45, 55, 60]);
+const SWORD_FORGE_COSTS = Object.freeze([
+  { gold: 1000, pearls: 0 },
+  { gold: 2000, pearls: 0 },
+  { gold: 0, pearls: 5 }
+]);
+
 const REGIONS = new Set(['platform', 'security', 'building2_floor1', 'building2_floor2', 'building2_boss']);
 const QUESTS = ['intro', 'security_active', 'security_complete', 'sword_awarded', 'building2_active'];
 const CHECKPOINTS = new Set(['platform_start', 'security_entry', 'floor1_entry', 'floor2_entry', 'boss_entry']);
@@ -54,10 +62,9 @@ export function rollBossLoot(randomValueArmor, randomValuePearl) {
 }
 
 export function getWeaponAttack(save) {
-  const weaponId = save.equipped?.weapon;
-  if (!weaponId) return 0;
-  if (weaponId === 'imperial_sword') return 35 + Math.min(9, Math.max(0, save.swordRank || 0)) * 5;
-  return ITEM_CATALOG[weaponId]?.attack || 0;
+  if (save.equipped?.weapon !== 'imperial_sword') return 0;
+  const rank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(save.swordRank) || 0)));
+  return IMPERIAL_SWORD_ATTACK_BY_RANK[rank];
 }
 
 export function getArmorReduction(save) {
@@ -84,10 +91,13 @@ export function sanitizeSave(raw) {
   clean.health = Math.min(clean.maxHealth, Math.max(1, Math.round(Number(clean.health) || clean.maxHealth)));
   clean.gold = Math.max(0, Math.floor(Number(clean.gold) || 0));
   clean.pearls = Math.max(0, Math.floor(Number(clean.pearls) || 0));
-  clean.swordRank = Math.min(9, Math.max(0, Math.floor(Number(clean.swordRank) || 0)));
+  clean.swordRank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(clean.swordRank) || 0)));
   clean.bossClears = Math.max(0, Math.floor(Number(clean.bossClears) || 0));
   if (!clean.inventory.includes(clean.equipped.weapon)) clean.equipped.weapon = null;
   if (!clean.inventory.includes(clean.equipped.armor)) clean.equipped.armor = null;
+  if (clean.equipped.weapon !== 'imperial_sword') {
+    clean.equipped.weapon = clean.inventory.includes('imperial_sword') ? 'imperial_sword' : null;
+  }
   clean.updatedAt = typeof clean.updatedAt === 'string' ? clean.updatedAt : new Date(0).toISOString();
   return clean;
 }
@@ -118,7 +128,7 @@ export function applyAction(saveRaw, action = {}) {
 
   if (action.type === 'buy_item') {
     const item = ITEM_CATALOG[action.itemId];
-    if (!item || item.price === null) throw new RuleError('该物品无法购买');
+    if (!item || item.slot !== 'armor' || item.price === null) throw new RuleError('军需商店只能购买护甲');
     if (next.inventory.includes(item.id)) throw new RuleError('已经拥有这件装备');
     if (next.gold < item.price) throw new RuleError(`金币不足，还差 ${item.price - next.gold}`);
     next.gold -= item.price;
@@ -127,6 +137,7 @@ export function applyAction(saveRaw, action = {}) {
   } else if (action.type === 'equip_item') {
     const item = ITEM_CATALOG[action.itemId];
     if (!item || !next.inventory.includes(item.id)) throw new RuleError('尚未拥有这件装备');
+    if (item.slot === 'weapon' && item.id !== 'imperial_sword') throw new RuleError('当前仅可使用帝王剑');
     next.equipped[item.slot] = item.id;
     result = { message: `已装备 ${item.name}`, itemId: item.id };
   } else if (action.type === 'exchange_armor') {
@@ -137,11 +148,14 @@ export function applyAction(saveRaw, action = {}) {
     result = { message: '五颗灵珠共鸣，获得天犬甲', itemId: 'heavenly_hound_armor' };
   } else if (action.type === 'forge_sword') {
     if (!next.inventory.includes('imperial_sword')) throw new RuleError('尚未获得帝王剑');
-    if (next.swordRank >= 9) throw new RuleError('帝王剑已达最高阶');
-    if (next.pearls < 3) throw new RuleError(`灵珠不足，还差 ${3 - next.pearls}`);
-    next.pearls -= 3;
+    if (next.swordRank >= IMPERIAL_SWORD_MAX_RANK) throw new RuleError('帝王剑第四阶暂未开放');
+    const cost = SWORD_FORGE_COSTS[next.swordRank];
+    if (next.gold < cost.gold) throw new RuleError(`金币不足，还差 ${cost.gold - next.gold}`);
+    if (next.pearls < cost.pearls) throw new RuleError(`灵珠不足，还差 ${cost.pearls - next.pearls}`);
+    next.gold -= cost.gold;
+    next.pearls -= cost.pearls;
     next.swordRank += 1;
-    result = { message: `帝王剑锻造至 ${next.swordRank} 阶`, swordRank: next.swordRank };
+    result = { message: `帝王剑锻造至 ${next.swordRank} 阶`, swordRank: next.swordRank, cost };
   } else if (action.type === 'award_sword') {
     if (next.quest !== 'security_complete') throw new RuleError('尚未完成“神的开始”');
     if (!next.inventory.includes('imperial_sword')) next.inventory.push('imperial_sword');

@@ -1,4 +1,4 @@
-import { ITEMS, armorReduction, weaponAttack } from './rules.js';
+import { IMPERIAL_SWORD_ATTACK_BY_RANK, IMPERIAL_SWORD_MAX_RANK, ITEMS, armorReduction, weaponAttack } from './rules.js';
 
 const q = (selector) => document.querySelector(selector);
 const qa = (selector) => [...document.querySelectorAll(selector)];
@@ -92,25 +92,37 @@ export const UI = {
   closeModal() { elements.modal.classList.remove('open'); modalHandler = null; },
   modalOpen() { return elements.modal.classList.contains('open'); },
   renderInventory(save) {
-    const owned = save.inventory.map(id => ITEMS[id]).filter(Boolean);
+    const owned = save.inventory
+      .filter(id => id === 'imperial_sword' || ITEMS[id]?.slot === 'armor')
+      .map(id => ITEMS[id])
+      .filter(Boolean);
     const cards = owned.length ? owned.map(item => {
       const equipped = save.equipped[item.slot] === item.id;
       const stat = item.slot === 'weapon' ? `攻击 ${item.id === 'imperial_sword' ? weaponAttack(save) : item.attack}` : `减伤 ${Math.round(item.reduction * 100)}%`;
       return `<article class="item-row ${item.rarity}"><div><small>${item.slot === 'weapon' ? '武器' : '护甲'} · ${stat}</small><h3>${item.name}</h3><p>${item.copy}</p></div><button data-action="equip" data-item="${item.id}" ${equipped ? 'disabled' : ''}>${equipped ? '已装备' : '装备'}</button></article>`;
     }).join('') : '<p class="empty-copy">背包还是空的。帝都不会同情赤手的人。</p>';
-    this.openModal('IMPERIAL INVENTORY', '装备与属性', `<div class="stat-strip"><span>武器攻击<strong>${weaponAttack(save)}</strong></span><span>护甲减伤<strong>${Math.round(armorReduction(save) * 100)}%</strong></span><span>帝王剑阶<strong>${save.swordRank} / 9</strong></span></div><div class="item-list">${cards}</div>`, null);
+    this.openModal('IMPERIAL INVENTORY', '装备与属性', `<div class="stat-strip"><span>武器攻击<strong>${weaponAttack(save)}</strong></span><span>护甲减伤<strong>${Math.round(armorReduction(save) * 100)}%</strong></span><span>帝王剑阶<strong>${save.swordRank} / ${IMPERIAL_SWORD_MAX_RANK}</strong></span></div><div class="item-list">${cards}</div>`, null);
   },
   renderShop(save) {
-    const products = Object.values(ITEMS).filter(item => item.price !== null);
+    const products = Object.values(ITEMS).filter(item => item.slot === 'armor' && item.price !== null);
     const html = products.map(item => {
-      const owned = save.inventory.includes(item.id); const stat = item.slot === 'weapon' ? `攻击 ${item.attack}` : `减伤 ${Math.round(item.reduction * 100)}%`;
-      return `<article class="shop-item ${item.rarity}"><div class="item-rune">${item.slot === 'weapon' ? '剑' : '甲'}</div><div><small>${stat}</small><h3>${item.name}</h3><p>${item.copy}</p></div><div class="price"><strong>${item.price}</strong><span>金币</span><button data-action="buy" data-item="${item.id}" ${owned || save.gold < item.price ? 'disabled' : ''}>${owned ? '已拥有' : '购买'}</button></div></article>`;
+      const owned = save.inventory.includes(item.id); const stat = `减伤 ${Math.round(item.reduction * 100)}%`;
+      return `<article class="shop-item ${item.rarity}"><div class="item-rune">甲</div><div><small>${stat}</small><h3>${item.name}</h3><p>${item.copy}</p></div><div class="price"><strong>${item.price}</strong><span>金币</span><button data-action="buy" data-item="${item.id}" ${owned || save.gold < item.price ? 'disabled' : ''}>${owned ? '已拥有' : '购买'}</button></div></article>`;
     }).join('');
-    this.openModal('ZHONGTIAN ARMORY', '台子 · 军需商店', `<div class="balance-line">当前金币 <strong>${save.gold}</strong></div><div class="shop-grid">${html}</div>`, null);
+    this.openModal('ZHONGTIAN ARMORY', '台子 · 护甲军需', `<div class="balance-line">当前金币 <strong>${save.gold}</strong></div><div class="shop-grid">${html}</div>`, null);
   },
   renderForge(save) {
-    const attack = 35 + save.swordRank * 5; const max = save.swordRank >= 9;
-    this.openModal('IMPERIAL FORGE', '台子 · 锻造与兑换', `<div class="forge-hero"><div class="forge-sword">帝</div><div><small>当前灵珠 ${save.pearls}</small><h3>帝王剑 · ${save.swordRank} 阶</h3><p>当前攻击 ${attack}${max ? ' · 已达最高阶' : ` · 下一阶 ${attack + 5}`}</p></div></div><div class="forge-actions"><article><small>帝王剑升阶</small><h3>三珠淬帝锋</h3><p>消耗 3 颗子狗灵珠，最高升至 9 阶。</p><button data-action="forge" ${max || save.pearls < 3 || !save.inventory.includes('imperial_sword') ? 'disabled' : ''}>消耗 3 灵珠</button></article><article><small>传说护甲保底</small><h3>五珠唤天犬</h3><p>消耗 5 颗子狗灵珠，兑换减伤 42% 的天犬甲。</p><button data-action="exchange" ${save.pearls < 5 || save.inventory.includes('heavenly_hound_armor') ? 'disabled' : ''}>消耗 5 灵珠</button></article></div>`, null);
+    const rank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(save.swordRank) || 0)));
+    const forgeCosts = [{ gold: 1000, pearls: 0 }, { gold: 2000, pearls: 0 }, { gold: 0, pearls: 5 }];
+    const cost = forgeCosts[rank] || null;
+    const max = !cost;
+    const hasSword = save.inventory.includes('imperial_sword');
+    const affordable = Boolean(cost && save.gold >= cost.gold && save.pearls >= cost.pearls);
+    const costLabel = cost ? (cost.gold ? `消耗 ${cost.gold} 金币` : `消耗 ${cost.pearls} 灵珠`) : '第四阶暂未开放';
+    const forgeCopy = !hasSword ? '完成“神的开始”后，王子毅会授予帝王剑。' : max ? '第三阶已成。龙血与帝气期间的普攻吸血提升至 30 点。' : rank === 2 ? '消耗 5 颗子狗灵珠，突破为 3 阶并强化吸血。' : `消耗 ${cost.gold} 金币，提升至 ${rank + 1} 阶。`;
+    const attack = hasSword ? IMPERIAL_SWORD_ATTACK_BY_RANK[rank] : 0;
+    const attackCopy = !hasSword ? '尚未获得帝王剑' : max ? `当前攻击 ${attack} · 第四阶暂未开放` : `当前攻击 ${attack} · 下一阶 ${IMPERIAL_SWORD_ATTACK_BY_RANK[rank + 1]}`;
+    this.openModal('IMPERIAL FORGE', '台子 · 锻造与兑换', `<div class="forge-hero"><div class="forge-sword">帝</div><div><small>当前金币 ${save.gold} · 当前灵珠 ${save.pearls}</small><h3>帝王剑 · ${rank} 阶</h3><p>${attackCopy}</p></div></div><div class="forge-actions"><article><small>帝王剑升阶</small><h3>${!hasSword ? '帝锋未授' : max ? '帝锋已成' : rank === 2 ? '五珠破境' : '金币淬锋'}</h3><p>${forgeCopy}</p><button data-action="forge" ${max || !hasSword || !affordable ? 'disabled' : ''}>${costLabel}</button></article><article><small>传说护甲保底</small><h3>五珠唤天犬</h3><p>消耗 5 颗子狗灵珠，兑换减伤 42% 的天犬甲。</p><button data-action="exchange" ${save.pearls < 5 || save.inventory.includes('heavenly_hound_armor') ? 'disabled' : ''}>消耗 5 灵珠</button></article></div>`, null);
   },
   showBossLoot(result) {
     const loot = [`金币 +${result.gold}`]; if (result.pearls) loot.push('子狗灵珠 +1'); if (result.armor) loot.push('天犬甲直接掉落');

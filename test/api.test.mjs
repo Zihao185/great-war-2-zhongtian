@@ -41,9 +41,11 @@ test('HTTP API registers, authenticates, isolates saves, and validates economy a
     assert.ok((await sword.json()).save.inventory.includes('imperial_sword'));
     await request('/api/save', { method: 'PUT', cookie, body: { quest: 'building2_active', region: 'building2_boss', checkpoint: 'boss_entry' } });
     for (let index = 0; index < 3; index++) assert.equal((await request('/api/boss-clear', { method: 'POST', cookie, body: {} })).status, 200);
-    const purchase = await request('/api/action', { method: 'POST', cookie, body: { type: 'buy_item', itemId: 'guard_broadsword' } });
+    const rejectedWeapon = await request('/api/action', { method: 'POST', cookie, body: { type: 'buy_item', itemId: 'guard_broadsword' } });
+    assert.equal(rejectedWeapon.status, 400);
+    const purchase = await request('/api/action', { method: 'POST', cookie, body: { type: 'buy_item', itemId: 'guard_armor' } });
     assert.equal(purchase.status, 200);
-    assert.ok((await purchase.json()).save.inventory.includes('guard_broadsword'));
+    assert.ok((await purchase.json()).save.inventory.includes('guard_armor'));
 
     const second = await request('/api/register', { method: 'POST', body: { username: 'hero_02', password: 'secure-pass-02' } });
     const secondCookie = second.headers.get('set-cookie').split(';')[0];

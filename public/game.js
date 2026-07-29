@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { UI } from './ui.js';
-import { ITEMS, SECURITY_SURVIVAL_SECONDS, actualDamage, armorReduction, clamp, distance, reflectBullet, segmentCircleHit, weaponAttack } from './rules.js';
+import { ITEMS, SECURITY_SURVIVAL_SECONDS, actualDamage, armorReduction, clamp, distance, lifeStealAmount, reflectBullet, segmentCircleHit, weaponAttack } from './rules.js';
 import { REGIONS, createRegionEnemies, drawRegion, getInteractions } from './world.js';
 
 const q = (selector) => document.querySelector(selector);
@@ -238,8 +238,10 @@ class GreatWarGame {
     }
     if (hits) {
       p.musou = Math.min(100,p.musou+10);
-      if (p.dragonBlood > 0) { p.dragonBlood -= 1; this.healPlayer(10,'龙血'); }
-      if (p.aura > 0) this.healPlayer(10,'帝气');
+      const dragonBloodActive = p.dragonBlood > 0;
+      const imperialAuraActive = p.aura > 0;
+      if (dragonBloodActive) p.dragonBlood -= 1;
+      if (dragonBloodActive || imperialAuraActive) this.healPlayer(lifeStealAmount(this.save), dragonBloodActive ? '龙血' : '帝气');
     }
     this.attackFx = { type:'arc', time:.30, max:.30, facing:p.facing, color:p.aura>0?'#fff0a0':'#e7c66e' };
     this.burst(end.x,end.y,p.aura>0?'#fff2aa':'#e5bd63',8,110,.32);

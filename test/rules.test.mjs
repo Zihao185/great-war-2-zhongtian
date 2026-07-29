@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ITEM_CATALOG,
   applyAction,
   calculateDamage,
   createInitialSave,
   getWeaponAttack,
   mergeProgressSave,
-  rollBossLoot
+  rollBossLoot,
+  sanitizeSave
 } from '../src/rules.mjs';
 
 test('damage follows armor formula and imperial aura halves the result', () => {
@@ -21,26 +21,43 @@ test('boss loot uses exact exclusive thresholds', () => {
   assert.deepEqual(rollBossLoot(0.05, 0.25), { armor: false, pearls: 0 });
 });
 
-test('shop purchase and equip are server-rule controlled', () => {
-  const initial = { ...createInitialSave(), gold: 330 };
-  const bought = applyAction(initial, { type: 'buy_item', itemId: 'iron_sword' }).save;
+test('shop accepts armor only and historical weapons cannot be equipped', () => {
+  const initial = {
+    ...createInitialSave(), gold: 330,
+    inventory: ['guard_broadsword', 'imperial_sword'],
+    equipped: { weapon: 'guard_broadsword', armor: null }
+  };
+  const sanitized = sanitizeSave(initial);
+  assert.equal(sanitized.equipped.weapon, 'imperial_sword');
+  assert.throws(() => applyAction(sanitized, { type: 'buy_item', itemId: 'guard_broadsword' }), /只能购买护甲/);
+  const bought = applyAction(sanitized, { type: 'buy_item', itemId: 'iron_armor' }).save;
   assert.equal(bought.gold, 0);
-  assert.ok(bought.inventory.includes('iron_sword'));
-  const equipped = applyAction(bought, { type: 'equip_item', itemId: 'iron_sword' }).save;
-  assert.equal(equipped.equipped.weapon, 'iron_sword');
-  assert.equal(getWeaponAttack(equipped), ITEM_CATALOG.iron_sword.attack);
+  assert.ok(bought.inventory.includes('iron_armor'));
+  assert.throws(() => applyAction(bought, { type: 'equip_item', itemId: 'guard_broadsword' }), /当前仅可使用帝王剑/);
 });
 
-test('five pearls exchange armor and three pearls forge up to rank nine', () => {
-  const initial = { ...createInitialSave(), pearls: 8, inventory: ['imperial_sword'], equipped: { weapon: 'imperial_sword', armor: null } };
+test('five pearls exchange armor', () => {
+  const initial = { ...createInitialSave(), pearls: 5 };
   const armor = applyAction(initial, { type: 'exchange_armor' }).save;
-  assert.equal(armor.pearls, 3);
+  assert.equal(armor.pearls, 0);
   assert.ok(armor.inventory.includes('heavenly_hound_armor'));
-  const forged = applyAction(armor, { type: 'forge_sword' }).save;
-  assert.equal(forged.pearls, 0);
-  assert.equal(forged.swordRank, 1);
-  assert.equal(getWeaponAttack(forged), 40);
-  assert.throws(() => applyAction({ ...forged, swordRank: 9, pearls: 3 }, { type: 'forge_sword' }), /最高阶/);
+});
+
+test('imperial sword uses two gold upgrades then five-pearl breakthrough and stops at rank three', () => {
+  const initial = { ...createInitialSave(), gold: 3000, pearls: 5, inventory: ['imperial_sword'], equipped: { weapon: 'imperial_sword', armor: null } };
+  const rank1 = applyAction(initial, { type: 'forge_sword' }).save;
+  assert.deepEqual([rank1.swordRank, rank1.gold, getWeaponAttack(rank1)], [1, 2000, 45]);
+  const rank2 = applyAction(rank1, { type: 'forge_sword' }).save;
+  assert.deepEqual([rank2.swordRank, rank2.gold, getWeaponAttack(rank2)], [2, 0, 55]);
+  const rank3 = applyAction(rank2, { type: 'forge_sword' }).save;
+  assert.deepEqual([rank3.swordRank, rank3.pearls, getWeaponAttack(rank3)], [3, 0, 60]);
+  assert.throws(() => applyAction(rank3, { type: 'forge_sword' }), /第四阶暂未开放/);
+});
+
+test('save sanitation caps historical sword ranks at three', () => {
+  const save = sanitizeSave({ ...createInitialSave(), swordRank: 99, inventory: ['imperial_sword'], equipped: { weapon: 'imperial_sword', armor: null } });
+  assert.equal(save.swordRank, 3);
+  assert.equal(getWeaponAttack(save), 60);
 });
 
 test('progress merge cannot forge gold, pearls, gear, or boss clears', () => {

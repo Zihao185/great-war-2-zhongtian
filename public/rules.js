@@ -9,12 +9,19 @@ export const ITEMS = Object.freeze({
   heavenly_hound_armor: { id: 'heavenly_hound_armor', name: '天犬甲', slot: 'armor', reduction: 0.42, price: null, rarity: 'legendary', copy: '子狗之力凝成的传说护甲。' }
 });
 
+export const IMPERIAL_SWORD_MAX_RANK = 3;
+export const IMPERIAL_SWORD_ATTACK_BY_RANK = Object.freeze([35, 45, 55, 60]);
 export const SECURITY_SURVIVAL_SECONDS = 30;
 
 export function weaponAttack(save) {
-  const id = save.equipped?.weapon;
-  if (id === 'imperial_sword') return 35 + Math.min(9, save.swordRank || 0) * 5;
-  return ITEMS[id]?.attack || 0;
+  if (save.equipped?.weapon !== 'imperial_sword') return 0;
+  const rank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(save.swordRank) || 0)));
+  return IMPERIAL_SWORD_ATTACK_BY_RANK[rank];
+}
+
+export function lifeStealAmount(save) {
+  const rank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(save.swordRank) || 0)));
+  return rank >= IMPERIAL_SWORD_MAX_RANK ? 30 : 10;
 }
 
 export function armorReduction(save) { return ITEMS[save.equipped?.armor]?.reduction || 0; }
