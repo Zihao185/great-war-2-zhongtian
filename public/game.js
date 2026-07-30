@@ -243,7 +243,7 @@ class GreatWarGame {
     p.attackChain = p.attackChainTimer > 0 ? p.attackChain % 3 + 1 : 1;
     p.attackChainTimer = .75;
     p.attackCd = p.aura > 0 ? .27 : .54;
-    this.startPlayerAnimation(`attack_${p.attackChain}`, p.attackCd, true);
+    this.startPlayerAnimation(`attack_${p.attackChain}`, p.attackCd, false);
     const start = { x: p.x, y: p.y }; const end = { x: p.x + Math.cos(p.facing) * 94, y: p.y + Math.sin(p.facing) * 94 };
     let hits = 0; const damage = weaponAttack(this.save);
     for (const enemy of this.enemies.filter(enemy => !enemy.dead)) {
@@ -362,6 +362,7 @@ class GreatWarGame {
     if(this.attackFx){this.attackFx.time-=dt;if(this.attackFx.time<=0)this.attackFx=null;}
     this.updateParticles(dt);this.updateBullets(dt);this.updateHazards(dt);
     if(this.canAct())this.updateMovement(dt);
+    if(this.canAct()&&keys.has(' '))this.basicAttack();
     if(!this.dead&&!this.transitioning){if(this.challenge?.active)this.updateChallenge(dt);for(const enemy of this.enemies.filter(enemy=>!enemy.dead))this.updateEnemy(enemy,dt);}
     this.updateInteraction();this.updateCamera(dt);this.updateQuest();UI.renderHud({save:this.save,player:p,region:this.region,challenge:this.challenge,boss:this.enemies.find(e=>e.boss&&!e.dead)});
   }

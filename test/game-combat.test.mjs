@@ -13,6 +13,11 @@ test('rising dragon input is buffered during dash and executes when movement end
   assert.match(source, /if \(p\.queuedRise\) \{ p\.queuedRise = false; this\.performRisingDragon\(true\); \}/);
 });
 
+test('holding space repeats basic attacks without locking movement', () => {
+  assert.match(source, /if\(this\.canAct\(\)&&keys\.has\(' '\)\)this\.basicAttack\(\);/);
+  assert.match(source, /this\.startPlayerAnimation\(`attack_\$\{p\.attackChain\}`, p\.attackCd, false\);/);
+});
+
 test('Pang renders as a standalone transparent Liangzi sprite', () => {
   assert.match(source, /pangSprite\.src = '\/assets\/characters\/liangzi-pang-sprite-v1\.png'/);
   assert.match(source, /const hasPangSprite=e\.bossId==='pang'&&pangSprite\.complete&&pangSprite\.naturalWidth/);
