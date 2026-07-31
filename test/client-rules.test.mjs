@@ -41,7 +41,11 @@ test('building one has five floors, an attic route, walls, traps, and archer pre
   assert.ok(createRegionEnemies('building1_floor3').filter(enemy => enemy.ranged).length >= 5);
   assert.ok(createRegionEnemies('building1_floor2').some(enemy => enemy.bossId === 'pang'));
   assert.ok(createRegionEnemies('building1_floor5').some(enemy => enemy.bossId === 'youkai'));
-  assert.ok(createRegionEnemies('building1_attic').some(enemy => enemy.bossId === 'dean'));
+  const dean = createRegionEnemies('building1_attic').find(enemy => enemy.bossId === 'dean');
+  assert.ok(dean);
+  assert.equal(dean.r, 18);
+  assert.equal(dean.speed, 265);
+  assert.equal(dean.mirror, true);
   assert.equal(getInteractions('building1_floor4', { atticKeys: 0, atticUnlocked: false }).some(item => item.type === 'altar'), false);
   assert.equal(getInteractions('building1_floor4', { atticKeys: 1, atticUnlocked: false }).some(item => item.type === 'altar'), true);
   assert.equal(getInteractions('building1_floor5', { atticUnlocked: true }).some(item => item.target === 'building1_attic'), true);

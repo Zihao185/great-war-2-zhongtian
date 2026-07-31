@@ -103,6 +103,7 @@ class GreatWarGame {
     this.nearestInteraction = null;
     this.challenge = null;
     this.attackFx = null;
+    this.deanAttackFx = null;
     this.running = true;
     this.dead = false;
     this.transitioning = false;
@@ -151,7 +152,7 @@ class GreatWarGame {
     const spawn = this.region.spawn; this.player.x = spawn.x; this.player.y = spawn.y; this.player.vx = 0; this.player.vy = 0;
     this.player.moving = false; this.player.dashMotion = null; this.player.queuedRise = false; this.player.attackChain = 0; this.player.attackChainTimer = 0;
     this.player.animation = { action: null, elapsed: 0, duration: 0, locked: false };
-    this.enemies = createRegionEnemies(this.region.id); this.bullets = []; this.hazards = createRegionHazards(this.region.id); this.walls = getRegionWalls(this.region.id); this.particles = []; this.roomClearNotified = false;
+    this.enemies = createRegionEnemies(this.region.id); this.bullets = []; this.hazards = createRegionHazards(this.region.id); this.walls = getRegionWalls(this.region.id); this.particles = []; this.deanAttackFx = null; this.roomClearNotified = false;
     this.interactions = getInteractions(this.region.id, this.save); this.nearestInteraction = null;
     this.challenge = this.region.id === 'security' && this.save.quest === 'security_active' ? { active: true, time: 0, shotCd: .8, resets: 0 } : null;
     this.camera.x = clamp(this.player.x - this.viewWidth / 2, 0, Math.max(0, this.region.width - this.viewWidth));
@@ -259,13 +260,14 @@ class GreatWarGame {
     }
     this.attackFx = { type:'arc', time:.30, max:.30, facing:p.facing, color:p.aura>0?'#fff0a0':'#e7c66e' };
     this.burst(end.x,end.y,p.aura>0?'#fff2aa':'#e5bd63',8,110,.32);
+    this.mirrorDeanAction('attack',{chain:p.attackChain});
   }
 
   castDash() {
     if (!this.canAct() || !this.hasSword()) { if (this.canAct()) UI.toast('帝王剑尚未入手', 'red'); return; }
     const p=this.player;if(p.dashCd>0||p.animation.locked)return;const start={x:p.x,y:p.y};const end={x:clamp(p.x+Math.cos(p.facing)*260,35,this.region.width-35),y:clamp(p.y+Math.sin(p.facing)*260,35,this.region.height-35)};
     for(const enemy of this.enemies.filter(enemy=>!enemy.dead))if(segmentCircleHit(start,end,enemy,24))this.hitEnemy(enemy,weaponAttack(this.save),p.facing);
-    p.dashMotion={start,end,elapsed:0,duration:.18};p.dashCd=3;p.comboWindow=.8;p.invuln=.22;this.startPlayerAnimation('dash',.44,true);this.attackFx={type:'dash',time:.44,max:.44,start,end,color:'#75e3cd'};this.burst(start.x,start.y,'#67d7c1',18,170,.5);this.camera.shake=3;
+    p.dashMotion={start,end,elapsed:0,duration:.18};p.dashCd=3;p.comboWindow=.8;p.invuln=.22;this.startPlayerAnimation('dash',.44,true);this.attackFx={type:'dash',time:.44,max:.44,start,end,color:'#75e3cd'};this.burst(start.x,start.y,'#67d7c1',18,170,.5);this.camera.shake=3;this.mirrorDeanAction('dash');
   }
 
   castRisingDragon() {
@@ -280,17 +282,36 @@ class GreatWarGame {
     const p=this.player;const end={x:p.x+Math.cos(p.facing)*115,y:p.y+Math.sin(p.facing)*115};let hit=false;
     for(const enemy of this.enemies.filter(enemy=>!enemy.dead))if(segmentCircleHit(p,end,enemy,48)){this.hitEnemy(enemy,Math.round(weaponAttack(this.save)*1.18),p.facing);enemy.airborne=combo?1.05:.42;hit=true;}
     p.riseCd=5;p.comboWindow=0;this.startPlayerAnimation(combo?'rise_combo':'rise',.50,true);if(combo){p.dashCd=0;p.dragonBlood=3;UI.toast('连招成立 · 突进刷新 · 龙血三层','cyan');}else if(hit)UI.toast('升龙命中');
-    this.attackFx={type:'rise',time:.58,max:.58,facing:p.facing,color:combo?'#ffe28a':'#75dbc5',combo};this.burst(end.x,end.y,combo?'#ffe38a':'#6bdac5',22,210,.65);this.camera.shake=6;
+    this.attackFx={type:'rise',time:.58,max:.58,facing:p.facing,color:combo?'#ffe28a':'#75dbc5',combo};this.burst(end.x,end.y,combo?'#ffe38a':'#6bdac5',22,210,.65);this.camera.shake=6;this.mirrorDeanAction('rise',{combo});
   }
 
   castImperialAura() {
     if (!this.canAct() || !this.hasSword()) return; const p=this.player;
     if(p.aura>0||p.animation.locked)return;if(p.musou<100){UI.toast(`无双尚未满盈：${Math.floor(p.musou)} / 100`,'red');return;}
-    p.aura=5;this.startPlayerAnimation('aura_cast',.35,true);this.burst(p.x,p.y,'#ffe08a',45,260,1.1);UI.toast('帝气 · 中天帝王之气降临','gold',3);this.camera.shake=8;
+    p.aura=5;this.startPlayerAnimation('aura_cast',.35,true);this.burst(p.x,p.y,'#ffe08a',45,260,1.1);UI.toast('帝气 · 中天帝王之气降临','gold',3);this.camera.shake=8;this.mirrorDeanAction('aura');
+  }
+
+  mirrorDeanAction(action,options={}) {
+    const dean=this.enemies.find(enemy=>enemy.bossId==='dean'&&!enemy.dead);if(!dean)return;
+    dean.facing=Math.atan2(this.player.y-dean.y,this.player.x-dean.x);const damage=weaponAttack(this.save);
+    if(action==='attack'){
+      dean.attackChain=options.chain||1;dean.attackChainTimer=.75;dean.animation={action:`attack_${dean.attackChain}`,elapsed:0,duration:dean.aura>0?.27:.54,locked:false};
+      const end={x:dean.x+Math.cos(dean.facing)*94,y:dean.y+Math.sin(dean.facing)*94};if(segmentCircleHit(dean,end,this.player,38)){
+        this.damagePlayer(damage);const dragonBloodActive=dean.dragonBlood>0;if(dragonBloodActive)dean.dragonBlood-=1;if(dragonBloodActive||dean.aura>0)this.healDean(dean,lifeStealAmount(this.save),dragonBloodActive?'龙血':'帝气');
+      }
+      this.deanAttackFx={type:'arc',time:.30,max:.30,facing:dean.facing,color:dean.aura>0?'#ff8f86':'#d86467'};
+    }else if(action==='dash'){
+      const start={x:dean.x,y:dean.y};const end={x:clamp(dean.x+Math.cos(dean.facing)*260,35,this.region.width-35),y:clamp(dean.y+Math.sin(dean.facing)*260,35,this.region.height-35)};
+      if(segmentCircleHit(start,end,this.player,24))this.damagePlayer(damage);dean.dashMotion={start,end,elapsed:0,duration:.18};dean.animation={action:'dash',elapsed:0,duration:.44,locked:true};this.deanAttackFx={type:'dash',time:.44,max:.44,start,end,color:'#e85e63'};this.burst(start.x,start.y,'#d84e59',18,170,.5);
+    }else if(action==='rise'){
+      const end={x:dean.x+Math.cos(dean.facing)*115,y:dean.y+Math.sin(dean.facing)*115};if(segmentCircleHit(dean,end,this.player,48))this.damagePlayer(Math.round(damage*1.18));dean.animation={action:options.combo?'rise_combo':'rise',elapsed:0,duration:.50,locked:true};if(options.combo)dean.dragonBlood=3;this.deanAttackFx={type:'rise',time:.58,max:.58,facing:dean.facing,color:options.combo?'#ff9c75':'#e16669',combo:options.combo};this.burst(end.x,end.y,options.combo?'#ff9c75':'#e16669',22,210,.65);
+    }else if(action==='aura'){
+      dean.aura=5;dean.animation={action:'aura_cast',elapsed:0,duration:.35,locked:true};this.burst(dean.x,dean.y,'#e85c63',45,260,1.1);
+    }
   }
 
   hitEnemy(enemy,damage,angle) {
-    if(enemy.dead)return;enemy.hp-=damage;enemy.hitFlash=.16;enemy.vx+=Math.cos(angle)*180;enemy.vy+=Math.sin(angle)*180;this.addFloater(enemy.x,enemy.y-enemy.r-12,`-${damage}`,'#ffe08a');this.burst(enemy.x,enemy.y,'#e6bd61',10,145,.42);this.camera.shake=Math.max(this.camera.shake,3);
+    if(enemy.dead)return;const dealt=enemy.mirror&&enemy.aura>0?Math.ceil(damage*.5):damage;enemy.hp-=dealt;enemy.hitFlash=.16;enemy.vx+=Math.cos(angle)*180;enemy.vy+=Math.sin(angle)*180;this.addFloater(enemy.x,enemy.y-enemy.r-12,`-${dealt}`,'#ffe08a');this.burst(enemy.x,enemy.y,'#e6bd61',10,145,.42);this.camera.shake=Math.max(this.camera.shake,3);
     if(enemy.hp<=0)this.killEnemy(enemy);
   }
 
@@ -306,6 +327,7 @@ class GreatWarGame {
   }
 
   healPlayer(amount,source) { const before=this.player.hp;this.player.hp=Math.min(this.player.maxHp,this.player.hp+amount);if(this.player.hp>before)this.addFloater(this.player.x,this.player.y-38,`+${this.player.hp-before} ${source}`,'#7ee0bd'); }
+  healDean(dean,amount,source) { const before=dean.hp;dean.hp=Math.min(dean.maxHp,dean.hp+amount);if(dean.hp>before)this.addFloater(dean.x,dean.y-38,`+${dean.hp-before} ${source}`,'#ff9890'); }
 
   damagePlayer(baseDamage) {
     const p=this.player;if(p.invuln>0||this.dead)return;const damage=actualDamage(baseDamage,armorReduction(this.save),p.aura>0);p.hp=Math.max(0,p.hp-damage);p.invuln=.68;p.hurt=.2;this.camera.shake=7;this.addFloater(p.x,p.y-32,`-${damage}`,'#ff766b');this.burst(p.x,p.y,'#e14f49',14,160,.5);
@@ -354,12 +376,28 @@ class GreatWarGame {
     if (p.animation.elapsed >= p.animation.duration) p.animation = { action: null, elapsed: 0, duration: 0, locked: false };
   }
 
+  advanceMirrorDean(dean,dt) {
+    dean.attackChainTimer=Math.max(0,dean.attackChainTimer-dt);if(dean.attackChainTimer===0)dean.attackChain=0;
+    if(dean.dashMotion){
+      dean.dashMotion.elapsed+=dt;const t=Math.min(1,dean.dashMotion.elapsed/dean.dashMotion.duration),eased=t*t*(3-2*t);
+      this.moveEntity(dean,dean.dashMotion.start.x+(dean.dashMotion.end.x-dean.dashMotion.start.x)*eased-dean.x,dean.dashMotion.start.y+(dean.dashMotion.end.y-dean.dashMotion.start.y)*eased-dean.y);
+      if(t===1)dean.dashMotion=null;
+    }
+    if(!dean.animation.action)return;dean.animation.elapsed+=dt;if(dean.animation.elapsed>=dean.animation.duration)dean.animation={action:null,elapsed:0,duration:0,locked:false};
+  }
+
+  updateMirrorDean(dean,dt) {
+    dean.aura=Math.max(0,dean.aura-dt);this.advanceMirrorDean(dean,dt);if(dean.dashMotion||dean.animation.locked)return;
+    const dx=this.player.x-dean.x,dy=this.player.y-dean.y,d=Math.hypot(dx,dy)||1;dean.facing=Math.atan2(dy,dx);
+    if(d>dean.r+this.player.r+30){this.moveEntity(dean,dx/d*dean.speed*dt,dy/d*dean.speed*dt);dean.step+=dt*13;}
+  }
+
   update(dt,time) {
     const p=this.player;
     p.attackCd=Math.max(0,p.attackCd-dt);p.dashCd=Math.max(0,p.dashCd-dt);p.riseCd=Math.max(0,p.riseCd-dt);p.comboWindow=Math.max(0,p.comboWindow-dt);p.invuln=Math.max(0,p.invuln-dt);p.hurt=Math.max(0,p.hurt-dt);
     this.advancePlayerAnimation(dt);
     if(p.aura>0){p.aura=Math.max(0,p.aura-dt);if(p.aura===0)p.musou=0;}
-    if(this.attackFx){this.attackFx.time-=dt;if(this.attackFx.time<=0)this.attackFx=null;}
+    if(this.attackFx){this.attackFx.time-=dt;if(this.attackFx.time<=0)this.attackFx=null;}if(this.deanAttackFx){this.deanAttackFx.time-=dt;if(this.deanAttackFx.time<=0)this.deanAttackFx=null;}
     this.updateParticles(dt);this.updateBullets(dt);this.updateHazards(dt);
     if(this.canAct())this.updateMovement(dt);
     if(this.canAct()&&keys.has(' '))this.basicAttack();
@@ -404,7 +442,7 @@ class GreatWarGame {
 
   updateEnemy(enemy,dt) {
     enemy.hitFlash=Math.max(0,enemy.hitFlash-dt);enemy.attackCd=Math.max(0,enemy.attackCd-dt);enemy.airborne=Math.max(0,enemy.airborne-dt);enemy.phaseTimer-=dt;
-    if(enemy.airborne>0)return;const p=this.player;const dx=p.x-enemy.x,dy=p.y-enemy.y,d=Math.hypot(dx,dy)||1,ux=dx/d,uy=dy/d;
+    if(enemy.airborne>0)return;if(enemy.bossId==='dean')return this.updateMirrorDean(enemy,dt);const p=this.player;const dx=p.x-enemy.x,dy=p.y-enemy.y,d=Math.hypot(dx,dy)||1,ux=dx/d,uy=dy/d;
     if(enemy.boss){
       const phase2=enemy.hp<=enemy.maxHp/2;
       if(enemy.bossId==='zigou'){
@@ -484,15 +522,26 @@ class GreatWarGame {
 
   drawWalls(time) {for(const wall of this.walls){ctx.fillStyle='rgba(4,10,13,.88)';ctx.fillRect(wall.x,wall.y,wall.w,wall.h);ctx.strokeStyle='rgba(156,99,79,.72)';ctx.lineWidth=3;ctx.strokeRect(wall.x,wall.y,wall.w,wall.h);ctx.fillStyle=`rgba(224,90,72,${.08+Math.sin(time*2+wall.x)*.03})`;ctx.fillRect(wall.x+5,wall.y+5,wall.w-10,wall.h-10);}}
 
-  drawPlayer(p,time) {
-    const bob=Math.sin(p.step)*2;ctx.save();ctx.translate(p.x,p.y);if(p.aura>0){const g=ctx.createRadialGradient(0,0,8,0,0,75);g.addColorStop(0,'rgba(255,217,112,.26)');g.addColorStop(1,'rgba(255,217,112,0)');ctx.fillStyle=g;ctx.fillRect(-80,-80,160,160);ctx.strokeStyle=`rgba(255,226,134,${.45+Math.sin(time*7)*.18})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,38+Math.sin(time*5)*4,0,Math.PI*2);ctx.stroke();}
-    ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(0,20,25,9,0,0,Math.PI*2);ctx.fill();if(p.invuln>0&&Math.floor(p.invuln*18)%2===0)ctx.globalAlpha=.45;
-    ctx.fillStyle='#245a67';ctx.beginPath();ctx.moveTo(-18,20);ctx.lineTo(-13,-19+bob);ctx.lineTo(12,-19+bob);ctx.lineTo(20,20);ctx.closePath();ctx.fill();ctx.strokeStyle=p.aura>0?'#ffe18a':'#d4a94f';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#c9916c';ctx.beginPath();ctx.arc(0,-29+bob,13,0,Math.PI*2);ctx.fill();ctx.fillStyle='#20262a';ctx.beginPath();ctx.arc(-1,-35+bob,14,Math.PI,0);ctx.fill();
-    if(this.hasSword()){ctx.save();ctx.rotate(p.facing);if(emperorSwordSprite.complete&&emperorSwordSprite.naturalWidth){ctx.drawImage(emperorSwordSprite,9,-10,74,37);}else{ctx.fillStyle='#bb9143';ctx.fillRect(10,-4,27,4);ctx.fillStyle=p.aura>0?'#fff2b0':'#e9e2d1';ctx.beginPath();ctx.moveTo(34,-7);ctx.lineTo(62,-2);ctx.lineTo(34,4);ctx.closePath();ctx.fill();}ctx.restore();}
+  drawPlayer(p,time) { this.drawYangWarrior(p,time,false); }
+
+  drawYangWarrior(p,time,corrupted) {
+    const bob=Math.sin(p.step||0)*2;const auraColor=corrupted?'239,83,91':'255,217,112';const outline=corrupted?'#e46168':p.aura>0?'#ffe18a':'#d4a94f';const action=p.animation?.action||'';const progress=p.animation?.duration?Math.min(1,p.animation.elapsed/p.animation.duration):0;let swing=0;
+    if(action.startsWith('attack_'))swing=-.9+progress*1.9;else if(action==='dash')swing=-.26;else if(action.startsWith('rise'))swing=-.7+progress*.9;
+    ctx.save();ctx.translate(p.x,p.y);if(p.aura>0){const g=ctx.createRadialGradient(0,0,8,0,0,75);g.addColorStop(0,`rgba(${auraColor},.28)`);g.addColorStop(1,`rgba(${auraColor},0)`);ctx.fillStyle=g;ctx.fillRect(-80,-80,160,160);ctx.strokeStyle=`rgba(${auraColor},${.45+Math.sin(time*7)*.18})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,38+Math.sin(time*5)*4,0,Math.PI*2);ctx.stroke();}
+    if(corrupted){ctx.strokeStyle='rgba(236,79,87,.72)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,-9,32+Math.sin(time*6)*3,0,Math.PI*2);ctx.stroke();}
+    ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(0,20,25,9,0,0,Math.PI*2);ctx.fill();if((p.invuln>0||p.hitFlash>0)&&Math.floor((p.invuln||p.hitFlash)*18)%2===0)ctx.globalAlpha=.45;
+    ctx.fillStyle='#245a67';ctx.beginPath();ctx.moveTo(-18,20);ctx.lineTo(-13,-19+bob);ctx.lineTo(12,-19+bob);ctx.lineTo(20,20);ctx.closePath();ctx.fill();ctx.strokeStyle=outline;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#c9916c';ctx.beginPath();ctx.arc(0,-29+bob,13,0,Math.PI*2);ctx.fill();ctx.fillStyle='#20262a';ctx.beginPath();ctx.arc(-1,-35+bob,14,Math.PI,0);ctx.fill();
+    if(corrupted){ctx.fillStyle='#ec6268';ctx.fillRect(-8,-30+bob,4,2);ctx.fillRect(4,-30+bob,4,2);}
+    if(corrupted||this.hasSword()){ctx.save();ctx.rotate(p.facing+swing);if(emperorSwordSprite.complete&&emperorSwordSprite.naturalWidth){ctx.drawImage(emperorSwordSprite,9,-10,74,37);}else{ctx.fillStyle='#bb9143';ctx.fillRect(10,-4,27,4);ctx.fillStyle=p.aura>0?'#fff2b0':'#e9e2d1';ctx.beginPath();ctx.moveTo(34,-7);ctx.lineTo(62,-2);ctx.lineTo(34,4);ctx.closePath();ctx.fill();}ctx.restore();}
     ctx.restore();
   }
 
+  drawMirrorDean(e,time) {
+    this.drawYangWarrior(e,time,true);this.drawMirrorDeanHud(e);
+  }
+
   drawEnemy(e,time) {
+    if(e.bossId==='dean'){this.drawMirrorDean(e,time);return;}
     ctx.save();ctx.translate(e.x,e.y);const lift=e.airborne>0?Math.sin(Math.min(1,e.airborne)*Math.PI)*38:0;ctx.translate(0,-lift);ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(0,e.r*.7,e.r*1.2,e.r*.38,0,0,Math.PI*2);ctx.fill();
     if(e.boss){
       const frenzy=e.hp<=e.maxHp/2;
@@ -514,18 +563,25 @@ class GreatWarGame {
     const width=e.boss?100:48;ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(-width/2,-e.r-(e.boss?60:39),width,6);ctx.fillStyle=e.boss?'#d84f4d':'#6bc6b1';ctx.fillRect(-width/2+1,-e.r-(e.boss?59:38),(width-2)*Math.max(0,e.hp/e.maxHp),4);ctx.restore();
   }
 
+  drawMirrorDeanHud(e) {
+    ctx.save();ctx.translate(e.x,e.y);ctx.font='700 15px serif';ctx.fillStyle='#ffaaa1';ctx.textAlign='center';ctx.fillText(e.name,0,-55);ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(-50,-78,100,6);ctx.fillStyle='#d84f4d';ctx.fillRect(-49,-77,98*Math.max(0,e.hp/e.maxHp),4);ctx.restore();
+  }
+
   drawBullet(b,time) {const g=ctx.createRadialGradient(b.x,b.y,1,b.x,b.y,b.r*4);g.addColorStop(0,b.color);g.addColorStop(1,'transparent');ctx.fillStyle=g;ctx.fillRect(b.x-b.r*4,b.y-b.r*4,b.r*8,b.r*8);ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(b.x,b.y,b.r+Math.sin(time*10+b.x)*1.2,0,Math.PI*2);ctx.fill();if(b.kind==='security'){ctx.strokeStyle='rgba(255,185,147,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(b.x,b.y,b.r+5,0,Math.PI*2);ctx.stroke();}}
   drawHazard(h){if(h.static){const active=Boolean(h.active);ctx.fillStyle=h.type==='fire'?(active?'rgba(255,104,43,.42)':'rgba(152,66,42,.14)'):(active?'rgba(220,67,66,.42)':'rgba(122,57,60,.14)');ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=active?'rgba(255,209,111,.9)':'rgba(214,90,80,.35)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(h.x,h.y,h.r*(active?.78:.92),0,Math.PI*2);ctx.stroke();return;}const progress=Math.max(0,h.time/h.max);ctx.fillStyle=`rgba(220,67,66,${h.triggered?.24:.07})`;ctx.beginPath();ctx.arc(h.x,h.y,h.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(255,102,83,${.4+progress*.5})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(h.x,h.y,h.r*(1-progress*.55),0,Math.PI*2);ctx.stroke();}
   drawAttackFx(){
-    const fx=this.attackFx;if(!fx)return;const progress=1-fx.time/fx.max;ctx.save();ctx.globalCompositeOperation='lighter';
+    this.drawAttackFxFor(this.attackFx,this.player);const dean=this.enemies.find(enemy=>enemy.bossId==='dean'&&!enemy.dead);if(dean)this.drawAttackFxFor(this.deanAttackFx,dean);
+  }
+  drawAttackFxFor(fx,actor){
+    if(!fx)return;const progress=1-fx.time/fx.max;ctx.save();ctx.globalCompositeOperation='lighter';
     if(fx.type==='arc'){
-      ctx.translate(this.player.x,this.player.y);ctx.rotate(fx.facing);ctx.strokeStyle=fx.color;ctx.globalAlpha=1-progress;ctx.lineWidth=7-progress*4;ctx.beginPath();ctx.arc(0,0,55+progress*45,-.9,.9);ctx.stroke();
+      ctx.translate(actor.x,actor.y);ctx.rotate(fx.facing);ctx.strokeStyle=fx.color;ctx.globalAlpha=1-progress;ctx.lineWidth=7-progress*4;ctx.beginPath();ctx.arc(0,0,55+progress*45,-.9,.9);ctx.stroke();
     }else if(fx.type==='dash'){
       const dx=fx.end.x-fx.start.x,dy=fx.end.y-fx.start.y,length=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);ctx.translate(fx.start.x,fx.start.y);ctx.rotate(angle);ctx.globalAlpha=.9*(1-progress);
       for(let lane=-1;lane<=1;lane++){ctx.strokeStyle=lane===0?'#d6fff4':fx.color;ctx.lineWidth=lane===0?7:3;ctx.beginPath();ctx.moveTo(-36-progress*50,lane*8);ctx.lineTo(length+20-progress*length*.38,lane*13);ctx.stroke();}
       const flash=ctx.createRadialGradient(length+12,0,2,length+12,0,34);flash.addColorStop(0,'rgba(220,255,248,.95)');flash.addColorStop(1,'rgba(85,220,196,0)');ctx.fillStyle=flash;ctx.fillRect(length-22,-34,68,68);
     }else{
-      ctx.translate(this.player.x,this.player.y);ctx.rotate(fx.facing);ctx.globalAlpha=.9*(1-progress);const color=fx.combo?'#ffe28a':fx.color;
+      ctx.translate(actor.x,actor.y);ctx.rotate(fx.facing);ctx.globalAlpha=.9*(1-progress);const color=fx.combo?'#ffe28a':fx.color;
       for(let lane=0;lane<3;lane++){ctx.strokeStyle=lane===0?'#fff5bb':color;ctx.lineWidth=lane===0?7:3;ctx.beginPath();ctx.moveTo(10+lane*7,20);ctx.quadraticCurveTo(62+lane*12,-92-progress*50,118+lane*10,-4);ctx.stroke();}
       const column=ctx.createLinearGradient(42,24,88,-140);column.addColorStop(0,'rgba(104,224,197,0)');column.addColorStop(.42,fx.combo?'rgba(255,221,120,.52)':'rgba(104,224,197,.48)');column.addColorStop(1,'rgba(235,255,244,0)');ctx.fillStyle=column;ctx.beginPath();ctx.moveTo(34,18);ctx.lineTo(76,-148-progress*42);ctx.lineTo(100,8);ctx.closePath();ctx.fill();
     }

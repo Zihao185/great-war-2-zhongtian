@@ -4,8 +4,9 @@ import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../public/game.js', import.meta.url), 'utf8');
 
-test('unarmed player does not draw the emperor sword', () => {
-  assert.match(source, /if\(this\.hasSword\(\)\)\{ctx\.save\(\);ctx\.rotate\(p\.facing\)/);
+test('unarmed player hides the emperor sword while the mirror dean always has one', () => {
+  assert.match(source, /drawPlayer\(p,time\) \{ this\.drawYangWarrior\(p,time,false\); \}/);
+  assert.match(source, /if\(corrupted\|\|this\.hasSword\(\)\)\{/);
 });
 
 test('rising dragon input is buffered during dash and executes when movement ends', () => {
@@ -16,6 +17,16 @@ test('rising dragon input is buffered during dash and executes when movement end
 test('holding space repeats basic attacks without locking movement', () => {
   assert.match(source, /if\(this\.canAct\(\)&&keys\.has\(' '\)\)this\.basicAttack\(\);/);
   assert.match(source, /this\.startPlayerAnimation\(`attack_\$\{p\.attackChain\}`, p\.attackCd, false\);/);
+});
+
+test('the attic dean mirrors player combat and reuses the Yang Zihao model', () => {
+  assert.match(source, /this\.mirrorDeanAction\('attack'/);
+  assert.match(source, /this\.mirrorDeanAction\('dash'/);
+  assert.match(source, /this\.mirrorDeanAction\('rise'/);
+  assert.match(source, /this\.mirrorDeanAction\('aura'/);
+  assert.match(source, /if\(enemy\.bossId==='dean'\)return this\.updateMirrorDean\(enemy,dt\);/);
+  assert.match(source, /this\.drawYangWarrior\(e,time,true\)/);
+  assert.match(source, /enemy\.mirror&&enemy\.aura>0\?Math\.ceil\(damage\*\.5\):damage/);
 });
 
 test('Pang renders as a standalone transparent Liangzi sprite', () => {

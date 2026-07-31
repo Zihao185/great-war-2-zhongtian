@@ -79,9 +79,9 @@ export function createRegionEnemies(regionId) {
       building1_wraith: { name: '残页怨灵', hp: 155, speed: 108, damage: 20, r: 23, goldType: 'building1_wraith' },
       pang: { name: '小胖', hp: 3300, speed: 56, damage: 12, r: 54, boss: true, bossId: 'pang' },
       youkai: { name: '魔王尤恺', hp: 1850, speed: 202, damage: 25, r: 45, boss: true, bossId: 'youkai' },
-      dean: { name: '黑化院长', hp: 2850, speed: 132, damage: 43, r: 50, boss: true, bossId: 'dean' }
+      dean: { name: '黑化院长', hp: 2850, speed: 265, damage: 0, r: 18, boss: true, bossId: 'dean', mirror: true }
     }[type];
-    return { id: `${type}_${index}`, type, x, y, maxHp: configs.hp, hp: configs.hp, vx: 0, vy: 0, attackCd: .5 + seed(index) * .7, hitFlash: 0, airborne: 0, dead: false, phaseTimer: 2, dashTimer: 0, ...configs };
+    return { id: `${type}_${index}`, type, x, y, maxHp: configs.hp, hp: configs.hp, vx: 0, vy: 0, attackCd: .5 + seed(index) * .7, hitFlash: 0, airborne: 0, dead: false, phaseTimer: 2, dashTimer: 0, facing: Math.PI, aura: 0, dragonBlood: 0, step: 0, attackChain: 0, attackChainTimer: 0, dashMotion: null, animation: { action: null, elapsed: 0, duration: 0, locked: false }, ...configs };
   };
   if (regionId === 'building2_floor1') return [
     make('hall_patrol', 510, 300, 1), make('hall_patrol', 760, 720, 2), make('hall_patrol', 990, 330, 3),
