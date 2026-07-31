@@ -140,6 +140,7 @@ export function createHttpServer({ store, staticDir, random = Math.random }) {
         const action = { type: 'boss_clear', bossId };
         if (bossId === 'zigou') { action.armorRoll = random(); action.pearlRoll = random(); }
         if (bossId === 'youkai') action.keyRoll = random();
+        if (bossId === 'dean') action.darkSwordRoll = random();
         const applied = applyAction(current, action);
         const save = store.putSave(session.accountId, applied.save);
         return json(res, 200, { save, result: applied.result });

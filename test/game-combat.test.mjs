@@ -19,6 +19,11 @@ test('holding space repeats basic attacks without locking movement', () => {
   assert.match(source, /this\.startPlayerAnimation\(`attack_\$\{p\.attackChain\}`, p\.attackCd, false\);/);
 });
 
+test('dark imperial sword has a player-only dark blade aura', () => {
+  assert.match(source, /const darkSword=!corrupted&&this\.save\.equipped\?\.weapon==='dark_imperial_sword';/);
+  assert.match(source, /if\(darkSword\)\{/);
+});
+
 test('the attic dean mirrors player combat and reuses the Yang Zihao model', () => {
   assert.match(source, /this\.mirrorDeanAction\('attack'/);
   assert.match(source, /this\.mirrorDeanAction\('dash'/);

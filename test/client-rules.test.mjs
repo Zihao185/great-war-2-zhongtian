@@ -20,8 +20,9 @@ test('dash segment hits enemies on the path but not outside it', () => {
   assert.equal(segmentCircleHit({ x: 0, y: 0 }, { x: 260, y: 0 }, { x: 130, y: 40, r: 12 }, 10), false);
 });
 
-test('client mirrors the three-rank imperial sword attack table and lifesteal bonus', () => {
+test('client mirrors the imperial and dark imperial sword combat tables', () => {
   const equipped = rank => ({ swordRank: rank, equipped: { weapon: 'imperial_sword', armor: 'heavenly_hound_armor' } });
+  const dark = { swordRank: 0, equipped: { weapon: 'dark_imperial_sword', armor: null } };
   assert.equal(weaponAttack(equipped(0)), 35);
   assert.equal(weaponAttack(equipped(1)), 45);
   assert.equal(weaponAttack(equipped(2)), 55);
@@ -29,6 +30,8 @@ test('client mirrors the three-rank imperial sword attack table and lifesteal bo
   assert.equal(weaponAttack(equipped(9)), 60);
   assert.equal(lifeStealAmount(equipped(2)), 10);
   assert.equal(lifeStealAmount(equipped(3)), 30);
+  assert.equal(weaponAttack(dark), 65);
+  assert.equal(lifeStealAmount(dark), 30);
   assert.equal(actualDamage(100, 0.42, false), 58);
   assert.equal(actualDamage(100, 0.42, true), 29);
 });

@@ -1,5 +1,6 @@
 export const ITEMS = Object.freeze({
   imperial_sword: { id: 'imperial_sword', name: '帝王剑', slot: 'weapon', attack: 35, price: null, rarity: 'quest', copy: '王子毅授予的中天帝剑，可用子狗灵珠锻造。' },
+  dark_imperial_sword: { id: 'dark_imperial_sword', name: '黑暗帝王剑', slot: 'weapon', attack: 65, price: null, rarity: 'legendary', copy: '院长黑化之力凝成的帝锋，三阶之上再增五点攻击。' },
   guard_broadsword: { id: 'guard_broadsword', name: '城卫阔剑', slot: 'weapon', attack: 42, price: 180, rarity: 'common', copy: '制式厚刃，沉稳可靠。' },
   iron_sword: { id: 'iron_sword', name: '玄铁长剑', slot: 'weapon', attack: 55, price: 330, rarity: 'rare', copy: '掺入玄铁的帝都长剑。' },
   breaker_blade: { id: 'breaker_blade', name: '破军重锋', slot: 'weapon', attack: 72, price: 620, rarity: 'epic', copy: '为正面撕开重甲而锻造。' },
@@ -11,15 +12,18 @@ export const ITEMS = Object.freeze({
 
 export const IMPERIAL_SWORD_MAX_RANK = 3;
 export const IMPERIAL_SWORD_ATTACK_BY_RANK = Object.freeze([35, 45, 55, 60]);
+export const DARK_IMPERIAL_SWORD_ATTACK = 65;
 export const SECURITY_SURVIVAL_SECONDS = 30;
 
 export function weaponAttack(save) {
+  if (save.equipped?.weapon === 'dark_imperial_sword') return DARK_IMPERIAL_SWORD_ATTACK;
   if (save.equipped?.weapon !== 'imperial_sword') return 0;
   const rank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(save.swordRank) || 0)));
   return IMPERIAL_SWORD_ATTACK_BY_RANK[rank];
 }
 
 export function lifeStealAmount(save) {
+  if (save.equipped?.weapon === 'dark_imperial_sword') return 30;
   const rank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(save.swordRank) || 0)));
   return rank >= IMPERIAL_SWORD_MAX_RANK ? 30 : 10;
 }

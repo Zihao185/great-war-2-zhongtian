@@ -1,5 +1,6 @@
 export const ITEM_CATALOG = Object.freeze({
   imperial_sword: { id: 'imperial_sword', name: '帝王剑', slot: 'weapon', attack: 35, price: null, rarity: 'quest' },
+  dark_imperial_sword: { id: 'dark_imperial_sword', name: '黑暗帝王剑', slot: 'weapon', attack: 65, price: null, rarity: 'legendary' },
   guard_broadsword: { id: 'guard_broadsword', name: '城卫阔剑', slot: 'weapon', attack: 42, price: 180, rarity: 'common' },
   iron_sword: { id: 'iron_sword', name: '玄铁长剑', slot: 'weapon', attack: 55, price: 330, rarity: 'common' },
   breaker_blade: { id: 'breaker_blade', name: '破军重锋', slot: 'weapon', attack: 72, price: 620, rarity: 'common' },
@@ -11,6 +12,7 @@ export const ITEM_CATALOG = Object.freeze({
 
 export const IMPERIAL_SWORD_MAX_RANK = 3;
 export const IMPERIAL_SWORD_ATTACK_BY_RANK = Object.freeze([35, 45, 55, 60]);
+export const DARK_IMPERIAL_SWORD_ATTACK = 65;
 const SWORD_FORGE_COSTS = Object.freeze([
   { gold: 1000, pearls: 0 },
   { gold: 2000, pearls: 0 },
@@ -68,7 +70,10 @@ export function rollBossLoot(randomValueArmor, randomValuePearl) {
   return { armor: randomValueArmor < 0.05, pearls: randomValuePearl < 0.25 ? 1 : 0 };
 }
 
+export function rollDeanDarkSword(randomValue) { return randomValue < 0.01; }
+
 export function getWeaponAttack(save) {
+  if (save.equipped?.weapon === 'dark_imperial_sword') return DARK_IMPERIAL_SWORD_ATTACK;
   if (save.equipped?.weapon !== 'imperial_sword') return 0;
   const rank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(save.swordRank) || 0)));
   return IMPERIAL_SWORD_ATTACK_BY_RANK[rank];
@@ -110,8 +115,8 @@ export function sanitizeSave(raw) {
   if (clean.building1Unlocked && !clean.unlockedRegions.includes('building1_floor1')) clean.unlockedRegions.push('building1_floor1');
   if (!clean.inventory.includes(clean.equipped.weapon)) clean.equipped.weapon = null;
   if (!clean.inventory.includes(clean.equipped.armor)) clean.equipped.armor = null;
-  if (clean.equipped.weapon !== 'imperial_sword') {
-    clean.equipped.weapon = clean.inventory.includes('imperial_sword') ? 'imperial_sword' : null;
+  if (!['imperial_sword', 'dark_imperial_sword'].includes(clean.equipped.weapon)) {
+    clean.equipped.weapon = clean.inventory.includes('imperial_sword') ? 'imperial_sword' : clean.inventory.includes('dark_imperial_sword') ? 'dark_imperial_sword' : null;
   }
   clean.updatedAt = typeof clean.updatedAt === 'string' ? clean.updatedAt : new Date(0).toISOString();
   return clean;
@@ -152,7 +157,7 @@ export function applyAction(saveRaw, action = {}) {
   } else if (action.type === 'equip_item') {
     const item = ITEM_CATALOG[action.itemId];
     if (!item || !next.inventory.includes(item.id)) throw new RuleError('尚未拥有这件装备');
-    if (item.slot === 'weapon' && item.id !== 'imperial_sword') throw new RuleError('当前仅可使用帝王剑');
+    if (item.slot === 'weapon' && !['imperial_sword', 'dark_imperial_sword'].includes(item.id)) throw new RuleError('当前仅可使用帝王剑或黑暗帝王剑');
     next.equipped[item.slot] = item.id;
     result = { message: `已装备 ${item.name}`, itemId: item.id };
   } else if (action.type === 'exchange_armor') {
@@ -231,11 +236,13 @@ export function applyAction(saveRaw, action = {}) {
       result = { message: '魔王尤恺伏诛', bossId, gold: 80, key, stayInRegion: true, vortex: next.atticUnlocked };
     } else if (bossId === 'dean') {
       if (!next.building1Unlocked || !next.atticUnlocked) throw new RuleError('阁楼封印尚未解除');
+      const darkSword = rollDeanDarkSword(Number(action.darkSwordRoll)) && !next.inventory.includes('dark_imperial_sword');
       next.gold += 500;
       next.deanDefeats += 1;
       next.region = 'platform';
       next.checkpoint = 'platform_start';
-      result = { message: '黑化院长恢复了清明', bossId, gold: 500 };
+      if (darkSword) next.inventory.push('dark_imperial_sword');
+      result = { message: '黑化院长恢复了清明', bossId, gold: 500, darkSword };
     } else {
       throw new RuleError('未知首领');
     }

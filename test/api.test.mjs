@@ -72,3 +72,40 @@ test('HTTP API registers, authenticates, isolates saves, and validates economy a
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('HTTP dean clear controls the dark sword roll on the server', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'zhongtian-dark-sword-api-'));
+  const store = createStore(join(dir, 'api.db'));
+  const server = createHttpServer({ store, staticDir: resolve('public'), random: () => .0099 });
+  await new Promise(resolveListen => server.listen(0, '127.0.0.1', resolveListen));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  async function request(path, { method = 'GET', body, cookie } = {}) {
+    return fetch(`${base}${path}`, {
+      method,
+      headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(cookie ? { cookie } : {}) },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  }
+
+  try {
+    const registered = await request('/api/register', { method: 'POST', body: { username: 'dark_sword_01', password: 'secure-pass-01' } });
+    const cookie = registered.headers.get('set-cookie').split(';')[0];
+    await request('/api/save', { method: 'PUT', cookie, body: { hero: 'yang_zihao', quest: 'security_active', region: 'security', checkpoint: 'security_entry' } });
+    await request('/api/save', { method: 'PUT', cookie, body: { quest: 'security_complete' } });
+    await request('/api/action', { method: 'POST', cookie, body: { type: 'award_sword' } });
+    await request('/api/save', { method: 'PUT', cookie, body: { quest: 'building2_active', region: 'building2_boss', checkpoint: 'boss_entry' } });
+    await request('/api/boss-clear', { method: 'POST', cookie, body: { bossId: 'zigou' } });
+    await request('/api/boss-clear', { method: 'POST', cookie, body: { bossId: 'youkai' } });
+    await request('/api/action', { method: 'POST', cookie, body: { type: 'activate_attic' } });
+    const dean = await request('/api/boss-clear', { method: 'POST', cookie, body: { bossId: 'dean', darkSwordRoll: .99 } });
+    const payload = await dean.json();
+    assert.equal(dean.status, 200);
+    assert.equal(payload.result.darkSword, true);
+    assert.ok(payload.save.inventory.includes('dark_imperial_sword'));
+  } finally {
+    await new Promise(resolveClose => server.close(resolveClose));
+    store.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -7,6 +7,7 @@ import {
   getWeaponAttack,
   mergeProgressSave,
   rollBossLoot,
+  rollDeanDarkSword,
   sanitizeSave
 } from '../src/rules.mjs';
 
@@ -19,6 +20,20 @@ test('damage follows armor formula and imperial aura halves the result', () => {
 test('boss loot uses exact exclusive thresholds', () => {
   assert.deepEqual(rollBossLoot(0.0499, 0.2499), { armor: true, pearls: 1 });
   assert.deepEqual(rollBossLoot(0.05, 0.25), { armor: false, pearls: 0 });
+});
+
+test('dean drops the dark imperial sword at the exact one percent boundary', () => {
+  assert.equal(rollDeanDarkSword(.0099), true);
+  assert.equal(rollDeanDarkSword(.01), false);
+  const base = { ...createInitialSave(), building1Unlocked: true, atticUnlocked: true, inventory: ['imperial_sword'], equipped: { weapon: 'imperial_sword', armor: null } };
+  const drop = applyAction(base, { type: 'boss_clear', bossId: 'dean', darkSwordRoll: .0099 });
+  assert.equal(drop.result.darkSword, true);
+  assert.ok(drop.save.inventory.includes('dark_imperial_sword'));
+  const equipped = applyAction(drop.save, { type: 'equip_item', itemId: 'dark_imperial_sword' }).save;
+  assert.equal(getWeaponAttack(equipped), 65);
+  const miss = applyAction(base, { type: 'boss_clear', bossId: 'dean', darkSwordRoll: .01 });
+  assert.equal(miss.result.darkSword, false);
+  assert.equal(miss.save.inventory.includes('dark_imperial_sword'), false);
 });
 
 test('shop accepts armor only and historical weapons cannot be equipped', () => {

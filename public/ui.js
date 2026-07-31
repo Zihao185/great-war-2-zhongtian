@@ -92,13 +92,15 @@ export const UI = {
   closeModal() { elements.modal.classList.remove('open'); modalHandler = null; },
   modalOpen() { return elements.modal.classList.contains('open'); },
   renderInventory(save) {
+    const swordRank = Math.min(IMPERIAL_SWORD_MAX_RANK, Math.max(0, Math.floor(Number(save.swordRank) || 0)));
     const owned = save.inventory
-      .filter(id => id === 'imperial_sword' || ITEMS[id]?.slot === 'armor')
+      .filter(id => ['imperial_sword', 'dark_imperial_sword'].includes(id) || ITEMS[id]?.slot === 'armor')
       .map(id => ITEMS[id])
       .filter(Boolean);
     const cards = owned.length ? owned.map(item => {
       const equipped = save.equipped[item.slot] === item.id;
-      const stat = item.slot === 'weapon' ? `攻击 ${item.id === 'imperial_sword' ? weaponAttack(save) : item.attack}` : `减伤 ${Math.round(item.reduction * 100)}%`;
+      const attack = item.id === 'imperial_sword' ? IMPERIAL_SWORD_ATTACK_BY_RANK[swordRank] : item.attack;
+      const stat = item.slot === 'weapon' ? `攻击 ${attack}` : `减伤 ${Math.round(item.reduction * 100)}%`;
       return `<article class="item-row ${item.rarity}"><div><small>${item.slot === 'weapon' ? '武器' : '护甲'} · ${stat}</small><h3>${item.name}</h3><p>${item.copy}</p></div><button data-action="equip" data-item="${item.id}" ${equipped ? 'disabled' : ''}>${equipped ? '已装备' : '装备'}</button></article>`;
     }).join('') : '<p class="empty-copy">背包还是空的。帝都不会同情赤手的人。</p>';
     this.openModal('IMPERIAL INVENTORY', '装备与属性', `<div class="stat-strip"><span>武器攻击<strong>${weaponAttack(save)}</strong></span><span>护甲减伤<strong>${Math.round(armorReduction(save) * 100)}%</strong></span><span>帝王剑阶<strong>${save.swordRank} / ${IMPERIAL_SWORD_MAX_RANK}</strong></span></div><div class="item-list">${cards}</div>`, null);
@@ -125,8 +127,8 @@ export const UI = {
     this.openModal('IMPERIAL FORGE', '台子 · 锻造与兑换', `<div class="forge-hero"><div class="forge-sword">帝</div><div><small>当前金币 ${save.gold} · 当前灵珠 ${save.pearls}</small><h3>帝王剑 · ${rank} 阶</h3><p>${attackCopy}</p></div></div><div class="forge-actions"><article><small>帝王剑升阶</small><h3>${!hasSword ? '帝锋未授' : max ? '帝锋已成' : rank === 2 ? '五珠破境' : '金币淬锋'}</h3><p>${forgeCopy}</p><button data-action="forge" ${max || !hasSword || !affordable ? 'disabled' : ''}>${costLabel}</button></article><article><small>传说护甲保底</small><h3>五珠唤天犬</h3><p>消耗 5 颗子狗灵珠，兑换减伤 42% 的天犬甲。</p><button data-action="exchange" ${save.pearls < 5 || save.inventory.includes('heavenly_hound_armor') ? 'disabled' : ''}>消耗 5 灵珠</button></article></div>`, null);
   },
   showBossLoot(result) {
-    const loot = [`金币 +${result.gold}`]; if (result.pearls) loot.push('子狗灵珠 +1'); if (result.armor) loot.push('天犬甲直接掉落'); if (result.key) loot.push('阁楼钥匙 +1'); if (result.letter) loot.push('院长的来信');
-    const titles = { zigou: ['子狗 · 伏诛', '犬神办公室重新归于寂静。'], pang: ['小胖 · 倒下', '旧院长办公室的厚重回声终于散去。'], youkai: ['魔王尤恺 · 伏诛', result.key ? '火焰褪去，一把阁楼钥匙落在灰烬中。' : '天台暂时安静下来，但阁楼仍在低语。'], dean: ['黑化院长 · 清醒', '他从黑暗中醒来，阁楼的禁书终于合上。'] };
+    const loot = [`金币 +${result.gold}`]; if (result.pearls) loot.push('子狗灵珠 +1'); if (result.armor) loot.push('天犬甲直接掉落'); if (result.key) loot.push('阁楼钥匙 +1'); if (result.letter) loot.push('院长的来信'); if (result.darkSword) loot.push('黑暗帝王剑掉落');
+    const titles = { zigou: ['子狗 · 伏诛', '犬神办公室重新归于寂静。'], pang: ['小胖 · 倒下', '旧院长办公室的厚重回声终于散去。'], youkai: ['魔王尤恺 · 伏诛', result.key ? '火焰褪去，一把阁楼钥匙落在灰烬中。' : '天台暂时安静下来，但阁楼仍在低语。'], dean: ['黑化院长 · 清醒', result.darkSword ? '禁书合上的瞬间，黑暗帝王剑从院长掌中坠落。' : '他从黑暗中醒来，阁楼的禁书终于合上。'] };
     const [title, copy] = titles[result.bossId] || titles.zigou;
     const letter = result.letter ? '<p>院长的来信：“我曾守住 1 号楼，却正在被黑暗吞没。不要相信阁楼里的低语。”封印已经解除。</p>' : '';
     const button = result.nextRegion ? '继续向 3 楼推进' : result.stayInRegion ? (result.vortex ? '查看阁楼漩涡' : '留在天台') : '返回中天台子';
